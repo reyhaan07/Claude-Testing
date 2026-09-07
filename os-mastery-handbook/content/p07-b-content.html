@@ -1,0 +1,237 @@
+<!-- ===================== PART VII CONTENT ===================== -->
+<h1 class="chapter" id="ch7" data-run="Memory Management"><span class="chnum">Part VII</span>Memory Management</h1>
+
+<p class="lead">Every process you met in Part II runs in its own address space. Here is how that
+address space is actually mapped onto physical RAM — the addresses, the page tables, and the hardware
+that translates one into the other billions of times per second.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-1">Why Memory Management?</h2>
+<p>Main memory (RAM) is a large array of bytes, each with an address. The CPU fetches instructions and
+data from it directly. The OS's memory-management job is to (1) give each process the memory it needs,
+(2) keep processes from reading or writing each other's memory (protection), (3) let more processes
+run than would fit if each needed all its memory at once, and (4) do all this fast, since every
+instruction touches memory. The central trick is a level of <b>indirection</b> between the addresses a
+program uses and the physical locations they end up at.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-2">Logical, Physical, and Virtual Addresses</h2>
+<dl>
+<dt>Logical (virtual) address</dt><dd>The address a program generates and sees — e.g. the value of a
+pointer. It's relative to the process's own address space, starting conceptually at 0.</dd>
+<dt>Physical address</dt><dd>The real address of a byte in the RAM chips. What the memory hardware
+actually uses.</dd>
+<dt>Virtual address</dt><dd>Modern synonym for logical address in a system with virtual memory (Part
+VIII). The full set a process can name is its <b>virtual address space</b>.</dd>
+</dl>
+<p>The <b>Memory Management Unit (MMU)</b> — hardware in the CPU — translates every logical address to
+a physical address on the fly, using tables the OS sets up. The program never sees physical addresses;
+this is what enables both protection and virtual memory.</p>
+
+<figure class="diagram">
+  <div class="flow">
+    <div class="node u">CPU / program<span class="sub">logical address</span></div>
+    <div class="arr">&rarr;</div>
+    <div class="node">MMU<span class="sub">translate via page table</span></div>
+    <div class="arr">&rarr;</div>
+    <div class="node hw">RAM<span class="sub">physical address</span></div>
+  </div>
+  <figcaption>The MMU sits between the CPU and RAM, translating every memory reference.</figcaption>
+</figure>
+
+<h3>Address Binding</h3>
+<p>"Binding" is fixing a program's addresses to real locations. It can happen at three times:</p>
+<ul class="tight">
+<li><b>Compile time</b> — if you know where the program will load, generate absolute addresses. Rigid
+(must recompile to move).</li>
+<li><b>Load time</b> — the compiler emits relocatable code; addresses are fixed when the program loads.</li>
+<li><b>Execution time</b> — binding is deferred until run time and can change as the process moves; this
+needs hardware (the MMU) and is what modern systems use. It's what makes paging and swapping possible.</li>
+</ul>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-3">Contiguous Allocation</h2>
+<p>The oldest scheme: give each process a single <em>contiguous</em> block of physical memory.</p>
+<dl>
+<dt>Fixed (static) partitioning</dt><dd>Divide memory into a fixed number of partitions of preset size.
+Simple, but a process smaller than its partition wastes the rest (internal fragmentation), and a
+process larger than any partition can't run.</dd>
+<dt>Variable (dynamic) partitioning</dt><dd>Partitions are created to fit each process exactly. No
+internal waste, but as processes come and go they leave holes, producing external fragmentation.</dd>
+</dl>
+<p><b>Placement strategies</b> for variable partitioning — where to put a new process among the holes:</p>
+<ul class="tight">
+<li><b>First fit</b> — first hole big enough. Fast.</li>
+<li><b>Best fit</b> — smallest hole that fits. Minimizes leftover, but leaves many tiny unusable holes.</li>
+<li><b>Worst fit</b> — largest hole. Leaves big usable leftovers (usually performs poorly in practice).</li>
+</ul>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-4">Fragmentation and Compaction</h2>
+<table class="avoid">
+<thead><tr><th style="width:24%">&nbsp;</th><th>Internal Fragmentation</th><th>External Fragmentation</th></tr></thead>
+<tbody>
+<tr><td>What</td><td>Wasted space <em>inside</em> an allocated block (allocated but unused)</td><td>Free memory exists but is split into scattered small holes, none big enough</td></tr>
+<tr><td>Cause</td><td>Fixed-size allocation larger than needed</td><td>Variable allocation over time</td></tr>
+<tr><td>Example</td><td>Process needs 18 KB, gets a 20 KB partition &rarr; 2 KB wasted</td><td>3 free holes of 10 KB each, but a 25 KB process can't use them</td></tr>
+<tr><td>Cure</td><td>Smaller/variable partitions; paging</td><td>Compaction; paging</td></tr>
+</tbody>
+</table>
+<p><b>Compaction</b> shuffles processes together to merge scattered holes into one big free block. It
+works only with execution-time binding (addresses can change), and it's expensive (lots of copying).
+The real cure for external fragmentation is <b>paging</b>, which drops the "contiguous" requirement
+entirely.</p>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Swapping the two fragmentations. Mnemonic: <b>In</b>ternal = wasted space <b>in</b>side a block you
+were given. <b>Ex</b>ternal = usable space <b>ex</b>iled into scattered holes <b>ex</b>ternal to any
+allocation. Paging eliminates external fragmentation but introduces a little internal fragmentation
+(the last partial page).</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-5">Paging</h2>
+<p><b>The big idea.</b> Stop requiring memory to be contiguous. Chop the process's virtual address
+space into fixed-size <b>pages</b> and physical memory into equal-size <b>frames</b> (a page and a
+frame are the same size, typically 4&nbsp;KB). Any page can go in any free frame; a per-process
+<b>page table</b> records which frame holds each page. External fragmentation vanishes because any
+frame fits any page.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — how an address is split</div>
+A logical address is divided into two parts: a <b>page number</b> (high bits) and an <b>offset</b>
+(low bits) within the page. The page table maps the page number &rarr; a frame number; the offset is
+copied unchanged. With page size 2<sup>k</sup>, the low <b>k</b> bits are the offset.
+<div class="formula">physical address = frame_number &times; page_size + offset</div></div>
+
+<figure class="diagram">
+<div class="asciiart">   LOGICAL ADDRESS                          PHYSICAL ADDRESS
+  ┌───────────┬──────────┐                 ┌───────────┬──────────┐
+  │ page #  p │ offset d │                 │ frame # f │ offset d │
+  └─────┬─────┴────┬─────┘                 └─────▲─────┴────▲─────┘
+        │          │  offset copied unchanged     │         │
+        ▼          └──────────────────────────────┼─────────┘
+   ┌─────────── PAGE TABLE ───────────┐            │
+   │  p → f   (page p lives in frame f)│ ───────────┘
+   └───────────────────────────────────┘</div>
+<figcaption>Paged address translation: the page number indexes the page table to get a frame number; the offset passes through.</figcaption>
+</figure>
+
+<p><b>Worked example.</b> Page size = 4&nbsp;KB = 2<sup>12</sup> bytes (so offset = 12 bits). Consider
+logical address <b>8196</b>:</p>
+<ul class="tight">
+<li>page number = 8196 &divide; 4096 = <b>2</b>; &nbsp; offset = 8196 mod 4096 = <b>4</b>.</li>
+<li>Suppose the page table says page 2 &rarr; frame <b>8</b>.</li>
+<li>physical address = 8 &times; 4096 + 4 = <b>32772</b>.</li>
+</ul>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Thinking paging needs no translation cost. Naive paging <em>doubles</em> memory latency: one access to
+read the page table (in RAM) plus one to reach the actual data. That's exactly the problem the TLB
+solves.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-6">The TLB (Translation Lookaside Buffer)</h2>
+<p><b>What &amp; why.</b> Since the page table lives in RAM, every memory reference would need an extra
+RAM access just to translate — halving performance. The <span class="term">TLB</span> is a small,
+very fast associative cache inside the MMU that remembers the most recent page&rarr;frame translations.</p>
+<ul class="tight">
+<li><b>TLB hit</b> — translation found in the TLB; frame number returned in ~1 cycle. Fast path.</li>
+<li><b>TLB miss</b> — not cached; the MMU walks the page table in RAM (slow), then loads the result
+into the TLB for next time.</li>
+</ul>
+<div class="formula">Effective Access Time = P<sub>hit</sub>(TLB + mem) + P<sub>miss</sub>(TLB + 2&times;mem)</div>
+<p><b>Numerical:</b> TLB access 10&nbsp;ns, memory access 100&nbsp;ns, hit ratio 90%. EAT = 0.9&times;(10+100) + 0.1&times;(10+200) = 99 + 21 = <b>120&nbsp;ns</b> — versus 200&nbsp;ns with no TLB. Real TLB hit rates exceed 99%, thanks to <b>locality</b> (Part VIII).</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+The TLB is why paging is practical. It exploits <b>locality of reference</b>: programs keep touching
+the same few pages, so a tiny cache of recent translations catches almost every access. On a context
+switch the TLB may be flushed (translations belong to the old process's page table) — one of the
+hidden costs of switching processes.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-7">Multi-Level and Inverted Page Tables</h2>
+<p><b>The problem:</b> a single flat page table for a 32-bit address space with 4&nbsp;KB pages needs
+2<sup>20</sup> ≈ 1 million entries <em>per process</em> — megabytes of table, mostly unused. Two
+solutions:</p>
+<dl>
+<dt>Multi-level (hierarchical) page tables</dt><dd>Page the page table itself. An outer table points to
+inner tables, which point to frames. Unused regions simply have no inner table, saving space. x86-64
+uses <b>four levels</b>. Cost: a TLB miss now walks several levels (more memory accesses) — mitigated
+by the TLB.</dd>
+<dt>Inverted page table</dt><dd>One table for the <em>whole system</em>, with one entry per physical
+frame (not per virtual page). Saves enormous space, but looking up "which frame holds page p of process
+X" requires searching — so it's paired with a hash table.</dd>
+</dl>
+
+<figure class="diagram">
+<div class="asciiart">   Two-level translation:
+   virtual addr ┌── p1 ──┬── p2 ──┬── offset ──┐
+                └───┬────┴───┬────┴─────┬───────┘
+                    ▼        ▼          │
+              [outer PT] → [inner PT] → frame + offset → physical</div>
+<figcaption>A hierarchical page table: the outer table indexes inner tables; empty regions cost nothing.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-8">Segmentation</h2>
+<p><b>What.</b> Instead of fixed-size pages, divide a program by its <em>logical</em> parts —
+<b>segments</b> like code, data, stack, heap — each a variable-length unit meaningful to the
+programmer. A logical address is &lt;segment number, offset&gt;; a <b>segment table</b> stores each
+segment's base and limit. This matches how programmers think and eases protection/sharing per segment
+(e.g. code read-only, shared between processes).</p>
+<p><b>Downside:</b> variable-size segments bring back <b>external fragmentation</b> (like variable
+partitioning). Pure segmentation is largely historical; modern systems use paging, sometimes
+<b>segmentation with paging</b> (segments divided into pages) to get both worlds.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s7-9">Paging vs Segmentation</h2>
+<table class="avoid">
+<thead><tr><th style="width:24%">Aspect</th><th>Paging</th><th>Segmentation</th></tr></thead>
+<tbody>
+<tr><td>Unit</td><td>Fixed-size page</td><td>Variable-size logical segment</td></tr>
+<tr><td>Divided by</td><td>Hardware, arbitrary boundaries</td><td>Programmer's logical structure</td></tr>
+<tr><td>Address</td><td>(page #, offset)</td><td>(segment #, offset)</td></tr>
+<tr><td>Fragmentation</td><td>Internal (last page)</td><td>External (variable holes)</td></tr>
+<tr><td>Table</td><td>Page table</td><td>Segment table (base + limit)</td></tr>
+<tr><td>Visible to programmer?</td><td>No (transparent)</td><td>Yes (logical units)</td></tr>
+<tr><td>Sharing/protection</td><td>Per page</td><td>Per segment (natural)</td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part VII</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Distinguish logical, physical, and virtual addresses, and say what the MMU does.</li>
+      <li>Contrast internal and external fragmentation, with the "in/ex" mnemonic.</li>
+      <li>How does paging eliminate external fragmentation? What does it introduce instead?</li>
+      <li>Why does naive paging halve memory performance, and how does the TLB fix it?</li>
+      <li>Why are multi-level page tables more space-efficient than a flat one?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>Page size 1&nbsp;KB. Translate logical address 3500 given page 3 &rarr; frame 7. (Find page #, offset, physical address.)</li>
+      <li>TLB access 20&nbsp;ns, memory 100&nbsp;ns, hit ratio 80%. Compute the effective access time.</li>
+      <li>A 32-bit address space with 4&nbsp;KB pages: how many entries in a single-level page table? Why is that a problem?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Walk me through translating a virtual address to physical, including a TLB miss."</li>
+      <li>"Why do modern CPUs use paging instead of segmentation?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Logical&rarr;physical translation via page table &middot; page/offset splitting math &middot; the
+    role and payoff of the TLB &middot; internal vs external fragmentation.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On Linux, run <code>getconf PAGE_SIZE</code> (usually 4096). Then <code>cat /proc/self/maps</code>
+    to see your shell's virtual memory regions — code, heap, stack, shared libraries — each an address
+    range with permissions. You're looking at a real process's virtual address space.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> given a page size and page table you can
+    translate any logical address to physical by hand, compute effective access time with a TLB, and
+    explain why paging beats contiguous allocation.</p>
+  </div>
+</div>

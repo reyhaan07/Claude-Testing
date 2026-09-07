@@ -1,0 +1,246 @@
+<!-- ===================== PART VI CONTENT ===================== -->
+<h1 class="chapter" id="ch6" data-run="Deadlocks"><span class="chnum">Part VI</span>Deadlocks</h1>
+
+<p class="lead">A deadlock is a standstill: a set of processes each holding a resource the next one
+needs, in a circle, so none can ever proceed. Understanding the exact conditions that make it possible
+tells you precisely how to prevent it — and the Banker's Algorithm shows how to sidestep it entirely.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-1">What Is a Deadlock?</h2>
+<p><b>What is it?</b> A <span class="term">deadlock</span> is a situation where a set of processes are
+each blocked, waiting for a resource that another process in the set is holding, so that none of them
+can ever make progress. The system is stuck — permanently, without intervention.</p>
+
+<p><b>Simple intuition.</b> A narrow bridge with one lane. Two cars enter from opposite ends and meet
+in the middle. Neither can pass, and neither will back up. Both wait forever. Each car holds "its half
+of the bridge" and needs "the other half" — held by the other car.</p>
+
+<figure class="diagram">
+<div class="asciiart">   Thread A                         Thread B
+   lock(mutex1)  ✓ holds 1          lock(mutex2)  ✓ holds 2
+   lock(mutex2)  ✗ waits for 2      lock(mutex1)  ✗ waits for 1
+        │                                │
+        └──── A waits on B ────┐  ┌──── B waits on A ────┘
+                               ▼  ▼
+                     ● DEADLOCK — circular wait ●</div>
+<figcaption>The textbook two-lock deadlock: two threads acquire the same two locks in opposite orders.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-2">The Four Coffman Conditions</h2>
+<p>Deadlock is possible <em>only if all four</em> of these hold simultaneously. This is the single
+most important fact in the topic: break <b>any one</b> and deadlock cannot occur.</p>
+
+<table class="avoid">
+<thead><tr><th style="width:22%">Condition</th><th>Meaning</th><th>Bridge analogy</th></tr></thead>
+<tbody>
+<tr><td><b>1. Mutual Exclusion</b></td><td>At least one resource is non-shareable — only one process can hold it at a time.</td><td>The lane fits one car.</td></tr>
+<tr><td><b>2. Hold and Wait</b></td><td>A process holds at least one resource while waiting to acquire others.</td><td>A car sits on its half while waiting for the other half.</td></tr>
+<tr><td><b>3. No Preemption</b></td><td>Resources cannot be forcibly taken; they're released only voluntarily.</td><td>No one can make a car reverse.</td></tr>
+<tr><td><b>4. Circular Wait</b></td><td>A closed chain of processes exists, each waiting for a resource held by the next.</td><td>Car A waits on B, B waits on A.</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+All four Coffman conditions are <b>necessary</b>; together they are <b>sufficient</b> (given a single
+instance of each resource). Every deadlock <em>prevention</em> strategy works by making one of the four
+impossible. Circular wait is usually the easiest to attack (via resource ordering), which is why "lock
+ordering" is the number-one practical deadlock defense.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-3">Resource Allocation Graph (RAG)</h2>
+<p>A <span class="term">resource-allocation graph</span> pictures who holds and who wants what.
+Processes are circles, resources are squares. An edge <b>R &rarr; P</b> (assignment) means the resource
+is allocated to the process; an edge <b>P &rarr; R</b> (request) means the process is waiting for it.</p>
+
+<figure class="diagram">
+<div class="asciiart">   ( P1 ) ───request──▶ [ R2 ]        A cycle:
+     ▲                     │            P1 → R2 → P2 → R1 → P1
+     │assign               │assign      means a possible deadlock.
+   [ R1 ] ◀──request──── ( P2 )
+   With ONE instance per resource, a cycle ⇒ deadlock.
+   With MULTIPLE instances, a cycle ⇒ deadlock is POSSIBLE (not certain).</div>
+<figcaption>A cycle in the RAG signals deadlock (certain for single-instance resources, possible otherwise).</figcaption>
+</figure>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"A cycle in the resource-allocation graph always means deadlock." Only if every resource type has a
+<em>single</em> instance. With multiple instances of a resource, a cycle is <em>necessary but not
+sufficient</em> — another process outside the cycle might release an instance and break it.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-4">Four Ways to Handle Deadlock</h2>
+<ol class="tight">
+<li><b>Prevention</b> — structurally ensure one Coffman condition can never hold. (Conservative.)</li>
+<li><b>Avoidance</b> — allow the conditions but never enter a state that could lead to deadlock; the OS
+checks each request (Banker's Algorithm). (Needs future knowledge.)</li>
+<li><b>Detection &amp; Recovery</b> — allow deadlocks, detect them with an algorithm, then recover
+(kill/rollback). (Reactive.)</li>
+<li><b>Ignore it</b> — the "ostrich algorithm": pretend deadlocks never happen. Used by most
+general-purpose OSes (Linux, Windows) because deadlocks are rare and prevention is costly; reboot if
+one occurs.</li>
+</ol>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-5">Deadlock Prevention</h2>
+<p>Attack each condition:</p>
+<table class="avoid">
+<thead><tr><th style="width:26%">Break this</th><th>How</th><th>Cost</th></tr></thead>
+<tbody>
+<tr><td>Mutual Exclusion</td><td>Make resources shareable (e.g. read-only files); use spooling</td><td>Not always possible (some resources are inherently exclusive)</td></tr>
+<tr><td>Hold and Wait</td><td>Require a process to request <em>all</em> resources up front, or hold none while requesting</td><td>Low utilization; possible starvation</td></tr>
+<tr><td>No Preemption</td><td>If a process must wait, forcibly release the resources it holds</td><td>Only works for state-saveable resources (CPU, memory — not a printer mid-print)</td></tr>
+<tr><td>Circular Wait</td><td>Impose a global ordering on resources; always acquire in increasing order</td><td>Practical &amp; popular — but you must define and honor the order everywhere</td></tr>
+</tbody>
+</table>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"How do you prevent deadlock in real code?" Answer: <b>lock ordering</b> — establish a fixed global
+order for acquiring locks and always take them in that order. This breaks circular wait and is what
+real codebases actually do. The two-lock example deadlocks precisely because A and B take
+<code>mutex1</code>/<code>mutex2</code> in opposite orders; force both to take <code>mutex1</code>
+first and it's impossible.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-6">Deadlock Avoidance and Safe States</h2>
+<p>Avoidance is less restrictive than prevention: it permits the four conditions but, before granting
+any resource request, checks whether doing so keeps the system in a <b>safe state</b>.</p>
+<dl>
+<dt>Safe state</dt><dd>There exists at least one ordering of all processes (a <b>safe sequence</b>) in
+which each can obtain its maximum needed resources, run, and finish — even if every process demands its
+maximum. A safe state guarantees no deadlock.</dd>
+<dt>Unsafe state</dt><dd>No such sequence is guaranteed to exist. Unsafe does <em>not</em> mean deadlock
+— it means deadlock is <em>possible</em>. Avoidance simply refuses to ever step into unsafe territory.</dd>
+</dl>
+<figure class="diagram">
+<div class="asciiart">   ┌───────────────── all states ─────────────────┐
+   │   ┌──────── safe ────────┐                    │
+   │   │  no deadlock possible │   unsafe          │
+   │   │                       │   (deadlock       │
+   │   └───────────────────────┘    POSSIBLE) ──▶ deadlock │
+   └───────────────────────────────────────────────┘
+   Avoidance keeps the system inside the "safe" region.</div>
+<figcaption>Safe ⊂ unsafe ⊃ deadlock. Avoidance never lets the system leave the safe region.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-7">Banker's Algorithm (Worked Numerical)</h2>
+<p>The classic avoidance algorithm (Dijkstra). Like a banker who never lends so much that they can't
+satisfy every client's credit line, the OS grants a request only if the resulting state is safe.</p>
+
+<p><b>Data structures</b> (for <i>n</i> processes, <i>m</i> resource types):
+<b>Available[m]</b> (free units), <b>Max[n][m]</b> (each process's maximum claim),
+<b>Allocation[n][m]</b> (currently held), and <b>Need[n][m] = Max &minus; Allocation</b>.</p>
+
+<p><b>Example.</b> Total resources: A=10, B=5, C=7. Snapshot of five processes:</p>
+<table class="avoid">
+<thead><tr><th rowspan="2">Process</th><th colspan="3" class="c">Allocation</th><th colspan="3" class="c">Max</th><th colspan="3" class="c">Need = Max&minus;Alloc</th></tr>
+<tr><th class="c">A</th><th class="c">B</th><th class="c">C</th><th class="c">A</th><th class="c">B</th><th class="c">C</th><th class="c">A</th><th class="c">B</th><th class="c">C</th></tr></thead>
+<tbody>
+<tr><td>P0</td><td class="c">0</td><td class="c">1</td><td class="c">0</td><td class="c">7</td><td class="c">5</td><td class="c">3</td><td class="c">7</td><td class="c">4</td><td class="c">3</td></tr>
+<tr><td>P1</td><td class="c">2</td><td class="c">0</td><td class="c">0</td><td class="c">3</td><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">2</td><td class="c">2</td></tr>
+<tr><td>P2</td><td class="c">3</td><td class="c">0</td><td class="c">2</td><td class="c">9</td><td class="c">0</td><td class="c">2</td><td class="c">6</td><td class="c">0</td><td class="c">0</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">1</td><td class="c">1</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">0</td><td class="c">1</td><td class="c">1</td></tr>
+<tr><td>P4</td><td class="c">0</td><td class="c">0</td><td class="c">2</td><td class="c">4</td><td class="c">3</td><td class="c">3</td><td class="c">4</td><td class="c">3</td><td class="c">1</td></tr>
+</tbody>
+</table>
+<p>Allocated totals: A=7, B=2, C=5, so <b>Available = (10,5,7) &minus; (7,2,5) = (3, 3, 2)</b>.</p>
+
+<p><b>Safety check.</b> Start with Work = Available = (3,3,2) and all processes unfinished. Repeatedly
+find a process whose Need &le; Work; "run" it and add its Allocation back to Work.</p>
+<table class="avoid">
+<thead><tr><th>Step</th><th>Pick (Need &le; Work?)</th><th class="c">Need</th><th class="c">Work before</th><th class="c">Work after (+Alloc)</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>P1: (1,2,2) &le; (3,3,2) ✓</td><td class="c">1 2 2</td><td class="c">3 3 2</td><td class="c">5 3 2</td></tr>
+<tr><td>2</td><td>P3: (0,1,1) &le; (5,3,2) ✓</td><td class="c">0 1 1</td><td class="c">5 3 2</td><td class="c">7 4 3</td></tr>
+<tr><td>3</td><td>P0: (7,4,3) &le; (7,4,3) ✓</td><td class="c">7 4 3</td><td class="c">7 4 3</td><td class="c">7 5 3</td></tr>
+<tr><td>4</td><td>P2: (6,0,0) &le; (7,5,3) ✓</td><td class="c">6 0 0</td><td class="c">7 5 3</td><td class="c">10 5 5</td></tr>
+<tr><td>5</td><td>P4: (4,3,1) &le; (10,5,5) ✓</td><td class="c">4 3 1</td><td class="c">10 5 5</td><td class="c">10 5 7</td></tr>
+</tbody>
+</table>
+<div class="formula">All five processes finished &rArr; state is <b>SAFE</b>. Safe sequence = &lang; P1, P3, P0, P2, P4 &rang;</div>
+
+<p><b>A resource request.</b> Suppose P1 now requests <b>(1, 0, 2)</b>. Banker's checks:
+(i) Request &le; Need P1 (1,2,2)? ✓&nbsp; (ii) Request &le; Available (3,3,2)? ✓. Tentatively grant:
+Available &rarr; (2,3,0), Alloc(P1) &rarr; (3,0,2), Need(P1) &rarr; (0,2,0). Re-run the safety check
+&mdash; it still finds the sequence &lang; P1, P3, P0, P2, P4 &rang;, so the state is safe and the
+request is <b>granted</b>. (Had it been unsafe, the request would be denied and P1 made to wait.)</p>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+The mechanical recipe: (1) compute <b>Need = Max &minus; Allocation</b>; (2) <b>Available = Total
+&minus; sum of Allocation</b>; (3) run the safety loop with <code>Work</code> and <code>Finish[]</code>.
+If you can find any order that finishes everyone, it's safe. For a request, check <code>Request ≤
+Need</code> and <code>Request ≤ Available</code>, pretend-allocate, then re-run safety. Practice this
+until it's automatic — it's a guaranteed exam question (see Part XIX for more).</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-8">Deadlock Detection and Recovery</h2>
+<p>If you neither prevent nor avoid, you must <b>detect</b>. For single-instance resources, detection =
+finding a cycle in the (wait-for) graph. For multiple instances, an algorithm similar to the Banker's
+safety check runs periodically: if some processes can never finish, they're deadlocked.</p>
+<p><b>Recovery</b> options once a deadlock is found:</p>
+<ul class="tight">
+<li><b>Process termination</b> — kill all deadlocked processes, or kill them one at a time (least-cost
+first) until the cycle breaks.</li>
+<li><b>Resource preemption</b> — forcibly take a resource from one process and give it to another,
+<b>rolling back</b> the victim to a safe checkpoint. Must avoid starving the same victim repeatedly.</li>
+</ul>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s6-9">Deadlock vs Starvation vs Livelock</h2>
+<table class="avoid">
+<thead><tr><th style="width:18%">&nbsp;</th><th>Deadlock</th><th>Starvation</th><th>Livelock</th></tr></thead>
+<tbody>
+<tr><td>What happens</td><td>Processes blocked forever in a circular wait</td><td>A process waits indefinitely while others proceed</td><td>Processes actively change state but make no progress</td></tr>
+<tr><td>Are they running?</td><td>No — all blocked</td><td>Others run; the victim doesn't</td><td>Yes — busy, but uselessly</td></tr>
+<tr><td>Cause</td><td>All four Coffman conditions</td><td>Unfair scheduling / resource policy</td><td>Overly polite retry logic (both keep yielding)</td></tr>
+<tr><td>Analogy</td><td>Gridlocked intersection</td><td>Always skipped in line</td><td>Two people stepping aside in a hallway, repeatedly</td></tr>
+<tr><td>Fix</td><td>Break a Coffman condition</td><td>Aging / fair scheduling</td><td>Add randomness / backoff</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Deadlock:</b> everyone stuck, no one moving. <b>Livelock:</b> everyone moving, no one progressing
+(they keep reacting to each other). <b>Starvation:</b> the system progresses, but <em>one</em> unlucky
+process never gets its turn. All three are "no progress" failures, but the mechanism differs — and so
+does the fix.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part VI</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Name the four Coffman conditions and give the bridge analogy for each.</li>
+      <li>Why must all four hold for deadlock, and what does that imply for prevention?</li>
+      <li>When does a cycle in a resource-allocation graph guarantee deadlock?</li>
+      <li>Define safe and unsafe states. Does unsafe mean deadlock?</li>
+      <li>Distinguish deadlock, livelock, and starvation.</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>Given Available=(3,3,2) and the table in &sect;6.7, is a request of (3,3,0) by P4 grantable? Show the safety check.</li>
+      <li>Rewrite the two-lock deadlock example so it cannot deadlock, and name the condition you broke.</li>
+      <li>A printer deadlock can't be fixed by preemption — why? Which resources <em>can</em> be preempted?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Why do most real operating systems 'ignore' deadlock (ostrich algorithm)?"</li>
+      <li>"Walk me through the Banker's Algorithm and its main practical drawback." (Hint: needs max claims in advance.)</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The four Coffman conditions and how to break each &middot; safe vs unsafe vs deadlocked &middot;
+    the full Banker's safety check &middot; deadlock vs livelock vs starvation.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Write a two-thread C program that deadlocks: thread A locks <code>m1</code> then <code>m2</code>;
+    thread B locks <code>m2</code> then <code>m1</code>; put a <code>sleep(1)</code> between the two
+    locks so it deadlocks reliably. Run it — it hangs. Then fix it by making both threads lock in the
+    same order, and watch it complete.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can run the Banker's Algorithm on any
+    snapshot to decide safety and grant/deny a request, and you can look at concurrent code and spot
+    the lock-ordering bug that would deadlock it.</p>
+  </div>
+</div>

@@ -1,0 +1,354 @@
+<!-- ===================== PART V CONTENT ===================== -->
+<h1 class="chapter" id="ch5" data-run="Process Synchronization"><span class="chnum">Part V</span>Process Synchronization</h1>
+
+<p class="lead">In Part III you saw <code>counter++</code> lose updates when two threads race. Here you
+learn to stop that — precisely, correctly, and without creating new problems like deadlock. These
+primitives are the vocabulary of every concurrent program you will ever write.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-1">The Critical-Section Problem</h2>
+<p>Recall the race: shared data touched by concurrent threads, at least one writing, with a
+non-atomic operation in the middle. The region of code that touches the shared data is the
+<b>critical section</b>. The goal is to allow only one thread inside it at a time — <b>mutual
+exclusion</b> — without breaking two other guarantees.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — the three requirements of a correct solution</div>
+<b>1. Mutual Exclusion.</b> At most one thread executes in the critical section at a time.<br>
+<b>2. Progress.</b> If no thread is in the critical section and some want in, the choice of who enters
+cannot be postponed indefinitely — a thread not interested must not block others.<br>
+<b>3. Bounded Waiting.</b> There is a limit on how many times other threads enter before a waiting
+thread gets its turn — no starvation.</div>
+
+<p>Every lock, semaphore, and monitor exists to satisfy these three at once. A "solution" that
+provides mutual exclusion but allows starvation (violates bounded waiting) is <em>wrong</em>.</p>
+
+<figure class="diagram">
+<div class="asciiart">   do {
+       ┌─────────────────┐
+       │  ENTRY SECTION  │   ← acquire permission (lock / wait / P)
+       └─────────────────┘
+       ┌─────────────────┐
+       │ CRITICAL SECTION│   ← touch shared data — ONE thread only
+       └─────────────────┘
+       ┌─────────────────┐
+       │  EXIT SECTION   │   ← release permission (unlock / signal / V)
+       └─────────────────┘
+          REMAINDER SECTION   ← everything else (no shared data)
+   } while (true);</div>
+<figcaption>The structure of any thread using a shared resource. The synchronization lives in the entry and exit sections.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-2">Atomic Operations</h2>
+<p><b>What &amp; why.</b> An <span class="term">atomic operation</span> executes as a single,
+indivisible step — it cannot be interrupted halfway, so no other thread can see a partial result.
+Atomicity is the bedrock: if <code>counter++</code> were atomic, there would be no race. Since it
+isn't, the hardware provides atomic primitives that locks are built from:</p>
+<ul class="tight">
+<li><b>Test-and-Set</b> — atomically read a flag and set it to 1, returning the old value.</li>
+<li><b>Compare-and-Swap (CAS)</b> — atomically: "if memory == expected, set it to new; return success."
+The workhorse of modern lock-free programming.</li>
+<li><b>Fetch-and-Add</b> — atomically add to a memory location and return the old value.</li>
+</ul>
+<pre><span class="ttl">A spinlock built from atomic test-and-set (concept)</span><span class="kw">int</span> lock = 0;                       <span class="cm">// 0 = free, 1 = held</span>
+
+<span class="kw">void</span> acquire() {
+    <span class="kw">while</span> (test_and_set(&amp;lock) == 1)  <span class="cm">// atomically: old=lock; lock=1; return old</span>
+        ;                             <span class="cm">// spin: keep trying until we saw 0</span>
+}
+<span class="kw">void</span> release() { lock = 0; }         <span class="cm">// hand it back</span></pre>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-3">Locks and Mutexes</h2>
+<p>A <span class="term">mutex</span> (MUTual EXclusion lock) is the simplest synchronization object: it
+is either <b>locked</b> or <b>unlocked</b>, and it has an <b>owner</b>. A thread <code>lock()</code>s
+it before the critical section and <code>unlock()</code>s it after. Only the thread that locked it may
+unlock it. If another thread tries to lock a held mutex, it <b>blocks</b> (sleeps) until the owner
+releases.</p>
+
+<pre class="long"><span class="ttl">Fixing the Part III race with a pthread mutex</span><span class="kw">#include</span> &lt;pthread.h&gt;
+
+<span class="kw">long</span> counter = 0;
+pthread_mutex_t m = PTHREAD_MUTEX_INITIALIZER;
+
+<span class="kw">void</span> *worker(<span class="kw">void</span> *arg) {
+    <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; 1000000; i++) {
+        pthread_mutex_lock(&amp;m);       <span class="cm">// ENTRY: only one thread past here</span>
+        counter++;                    <span class="cm">// CRITICAL SECTION (now safe)</span>
+        pthread_mutex_unlock(&amp;m);     <span class="cm">// EXIT: let the next thread in</span>
+    }
+    <span class="kw">return</span> NULL;
+}
+<span class="cm">// Now the final counter is EXACTLY N * 1000000, every single run.</span></pre>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Locking too much or too little. Lock <em>too little</em> (leave a shared write unprotected) and the
+race persists. Lock <em>too much</em> (hold the mutex across slow I/O) and you serialize everything,
+killing concurrency. Hold locks for the shortest correct span — protect the shared data, nothing more.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-4">Spinlocks: Busy Waiting vs Blocking</h2>
+<p>When a lock is held, a waiting thread can do one of two things:</p>
+<dl>
+<dt>Busy waiting (spinlock)</dt><dd>Loop, repeatedly checking the lock ("spinning"), burning CPU while
+it waits. No context switch, so it's <em>fast if the wait is very short</em>.</dd>
+<dt>Blocking (mutex)</dt><dd>Give up the CPU and sleep; the OS wakes the thread when the lock frees.
+Wastes no CPU, but pays two context switches (sleep + wake).</dd>
+</dl>
+
+<table class="avoid">
+<thead><tr><th style="width:26%">&nbsp;</th><th>Spinlock (busy wait)</th><th>Mutex (blocking)</th></tr></thead>
+<tbody>
+<tr><td>While waiting</td><td>Spins, consuming CPU</td><td>Sleeps, frees the CPU</td></tr>
+<tr><td>Cost to wait</td><td>Wasted cycles</td><td>Two context switches</td></tr>
+<tr><td>Best when</td><td>Very short critical sections, multi-core</td><td>Long or unpredictable waits</td></tr>
+<tr><td>On 1 core</td><td>Terrible (spins while holder can't run)</td><td>Correct choice</td></tr>
+<tr><td>Used in</td><td>Kernel, low-level, brief locks</td><td>Application code, general use</td></tr>
+</tbody>
+</table>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Spinlock vs mutex?" A spinlock <em>busy-waits</em>; a mutex <em>sleeps</em>. Spinlocks win only when
+the critical section is shorter than the cost of two context switches <em>and</em> you have multiple
+cores (so the holder can run on another core while you spin). On a single core, spinning is pointless
+— the thread holding the lock can't make progress while you monopolize the CPU spinning. Real kernels
+use hybrid "adaptive" locks that spin briefly, then sleep.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-5">Semaphores</h2>
+<p><b>What is it?</b> A <span class="term">semaphore</span> is an integer counter with two atomic
+operations, invented by Dijkstra. <code>wait()</code> (also <b>P</b>, or <code>down</code>) decrements
+it, blocking if it would go negative; <code>signal()</code> (also <b>V</b>, or <code>up</code>)
+increments it, waking a waiter. The counter tracks "how many units of a resource are available."</p>
+
+<pre><span class="ttl">Semaphore semantics (atomic)</span>wait(S):   <span class="cm">// P — acquire</span>
+    <span class="kw">while</span> (S &lt;= 0) ;   <span class="cm">// block until a unit is available</span>
+    S = S - 1;
+
+signal(S): <span class="cm">// V — release</span>
+    S = S + 1;         <span class="cm">// wake a blocked waiter if any</span></pre>
+
+<dl>
+<dt>Binary semaphore</dt><dd>Counter is only 0 or 1. Acts like a lock (mutual exclusion). But unlike a
+mutex, it has <em>no owner</em> — any thread may signal it.</dd>
+<dt>Counting semaphore</dt><dd>Counter ranges over 0..N, representing N identical resource units (e.g.
+"5 database connections available"). Threads <code>wait()</code> to take one, <code>signal()</code>
+to return one.</dd>
+</dl>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — two distinct uses of semaphores</div>
+<b>(1) Mutual exclusion:</b> a binary semaphore initialized to 1 guards a critical section. <b>(2)
+Signaling / ordering:</b> a semaphore initialized to 0 makes one thread <em>wait</em> for another to
+reach a point (thread A does <code>signal</code>, thread B's <code>wait</code> unblocks). This second
+use — enforcing an <em>order</em> between threads — is something a plain mutex cannot do, and it's the
+key to producer&ndash;consumer.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-6">Mutex vs Semaphore — the Comparisons</h2>
+<table class="avoid">
+<thead><tr><th style="width:22%">&nbsp;</th><th>Mutex</th><th>Binary Semaphore</th><th>Counting Semaphore</th></tr></thead>
+<tbody>
+<tr><td>Value</td><td>Locked / unlocked</td><td>0 or 1</td><td>0 .. N</td></tr>
+<tr><td>Ownership</td><td><b>Yes</b> — locker must unlock</td><td>No — anyone can signal</td><td>No</td></tr>
+<tr><td>Purpose</td><td>Mutual exclusion</td><td>Mutual exclusion / signaling</td><td>Manage N resources / signaling</td></tr>
+<tr><td>Can signal from another thread?</td><td>No</td><td>Yes</td><td>Yes</td></tr>
+<tr><td>Analogy</td><td>One key, you took it, you return it</td><td>One key on a hook, anyone can hang it</td><td>N keys on a hook</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — Mutex vs Semaphore in one line</div>
+A <b>mutex is a locking mechanism</b> (ownership; used for mutual exclusion). A <b>semaphore is a
+signaling mechanism</b> (a counter; used to coordinate/count). Every mutex can be built from a binary
+semaphore, but a mutex adds ownership. Use a <b>mutex</b> to protect data; use a <b>semaphore</b> to
+count resources or to make one thread wait for an event in another.</div>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"A binary semaphore is just a mutex." Not quite — the difference is <b>ownership</b>. A mutex can only
+be unlocked by the thread that locked it; a binary semaphore can be signaled by <em>any</em> thread.
+That makes the semaphore usable for signaling between threads, but also makes it easier to misuse
+(e.g. accidentally signal twice). This exact distinction is a favorite trap question.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-7">Monitors and Condition Variables</h2>
+<p>Semaphores are powerful but error-prone: forget a <code>signal</code>, or order two
+<code>wait</code>s wrongly, and you deadlock — with no compiler help. A <b>monitor</b> is a
+higher-level construct that bundles shared data <em>and</em> the operations on it, guaranteeing that
+only one thread is active inside the monitor at a time (automatic mutual exclusion). Languages provide
+them directly: Java's <code>synchronized</code>, C#'s <code>lock</code>.</p>
+
+<p>Inside a monitor, <b>condition variables</b> let a thread wait for a condition without busy-waiting:</p>
+<ul class="tight">
+<li><code>wait(cv)</code> — atomically release the monitor lock and sleep until signaled.</li>
+<li><code>signal(cv)</code> — wake one thread waiting on <code>cv</code>.</li>
+<li><code>broadcast(cv)</code> — wake all of them.</li>
+</ul>
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Checking a condition with <code>if</code> instead of <code>while</code> before <code>wait()</code>.
+After waking, a thread must <em>recheck</em> the condition in a loop, because (a) another thread may
+have changed it first (spurious/ stolen wakeups). Always: <code>while (!ready) cond_wait(&amp;cv,&amp;m);</code></div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-8">Classic Problem 1 — Producer&ndash;Consumer (Bounded Buffer)</h2>
+<p><b>Problem.</b> A producer thread creates items and puts them in a fixed-size buffer; a consumer
+takes them out. <b>Why it's hard:</b> the producer must wait if the buffer is <em>full</em>; the
+consumer must wait if it's <em>empty</em>; and both mutate the buffer, so access must be mutually
+exclusive.</p>
+
+<p><b>Naive (broken) approach:</b> a single mutex around the buffer. It prevents corruption but doesn't
+handle full/empty — the producer would spin-fail on a full buffer, wasting CPU, and there's no clean
+way to <em>wait</em> for space. <b>Correct approach:</b> two counting semaphores to track space and
+items, plus a mutex for exclusion.</p>
+
+<pre class="long"><span class="ttl">Producer–Consumer with semaphores (the canonical solution)</span>sem_t empty;   <span class="cm">// counts free slots; init to N (buffer size)</span>
+sem_t full;    <span class="cm">// counts filled slots; init to 0</span>
+pthread_mutex_t mutex;  <span class="cm">// protects the buffer; init unlocked</span>
+
+<span class="kw">void</span> producer() {
+    <span class="kw">while</span> (1) {
+        item = produce_item();
+        sem_wait(&amp;empty);          <span class="cm">// wait for a free slot  (blocks if full)</span>
+        pthread_mutex_lock(&amp;mutex);
+        buffer_put(item);          <span class="cm">// CRITICAL SECTION</span>
+        pthread_mutex_unlock(&amp;mutex);
+        sem_post(&amp;full);           <span class="cm">// announce one more item</span>
+    }
+}
+<span class="kw">void</span> consumer() {
+    <span class="kw">while</span> (1) {
+        sem_wait(&amp;full);           <span class="cm">// wait for an item  (blocks if empty)</span>
+        pthread_mutex_lock(&amp;mutex);
+        item = buffer_get();       <span class="cm">// CRITICAL SECTION</span>
+        pthread_mutex_unlock(&amp;mutex);
+        sem_post(&amp;empty);          <span class="cm">// announce one more free slot</span>
+        consume_item(item);
+    }
+}</pre>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake — deadly ordering bug</div>
+<b>Never</b> lock the mutex <em>before</em> the semaphore wait. If the producer does
+<code>lock(mutex)</code> then <code>wait(empty)</code> on a full buffer, it sleeps <em>holding the
+mutex</em>; the consumer can never lock the mutex to remove an item &rarr; <b>deadlock</b>. Order is
+always: <code>wait(counting semaphore)</code> first, then <code>lock(mutex)</code>.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-9">Classic Problem 2 — Readers&ndash;Writers</h2>
+<p><b>Problem.</b> A shared resource (e.g. a database) may be read by many threads simultaneously
+(reads don't conflict), but a writer needs <em>exclusive</em> access (writes conflict with everything).
+Maximize concurrency: allow concurrent readers, but a writer must be alone.</p>
+
+<p><b>Correct approach (reader-preference):</b> a mutex for the resource, a counter of active readers,
+and a mutex protecting that counter. The first reader in "locks out" writers; the last reader out
+releases them.</p>
+
+<pre class="long"><span class="ttl">Readers–Writers (reader preference)</span><span class="kw">int</span> readers = 0;
+pthread_mutex_t rc;          <span class="cm">// protects the readers counter</span>
+sem_t rw;                    <span class="cm">// exclusive access to the resource; init 1</span>
+
+<span class="kw">void</span> reader() {
+    pthread_mutex_lock(&amp;rc);
+    <span class="kw">if</span> (++readers == 1) sem_wait(&amp;rw); <span class="cm">// FIRST reader blocks writers</span>
+    pthread_mutex_unlock(&amp;rc);
+
+    read_resource();                     <span class="cm">// many readers here at once</span>
+
+    pthread_mutex_lock(&amp;rc);
+    <span class="kw">if</span> (--readers == 0) sem_post(&amp;rw); <span class="cm">// LAST reader frees writers</span>
+    pthread_mutex_unlock(&amp;rc);
+}
+<span class="kw">void</span> writer() {
+    sem_wait(&amp;rw);            <span class="cm">// exclusive: wait for zero readers AND no writer</span>
+    write_resource();
+    sem_post(&amp;rw);
+}</pre>
+<p><b>Trade-off / common mistake:</b> this reader-preference version can <b>starve writers</b> — a
+steady stream of readers never lets <code>readers</code> hit 0. Production solutions use
+writer-preference or a fair queue to guarantee bounded waiting for writers.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s5-10">Classic Problem 3 — Dining Philosophers</h2>
+<p><b>Problem.</b> Five philosophers sit around a table; one fork between each pair (five forks). To
+eat, a philosopher needs <em>both</em> adjacent forks. This models processes competing for multiple
+shared resources — and it's the canonical way to produce (and study) <b>deadlock</b>.</p>
+
+<figure class="diagram">
+<div class="asciiart">          P0
+       f4    f0
+     P4          P1
+       f3      f1
+         P3   P2
+            f2
+   Each Pi needs fork[i] (left) and fork[(i+1)%5] (right).</div>
+<figcaption>Five philosophers, five forks. Everyone grabbing their left fork at once = deadlock.</figcaption>
+</figure>
+
+<p><b>Naive (deadlocking) approach:</b> everyone picks up their left fork, then their right. If all
+five grab their left fork simultaneously, each holds one and waits forever for the right — a perfect
+<b>circular wait</b> (Part VI). <b>Correct approaches</b> that break the circular wait:</p>
+<ul class="tight">
+<li><b>Resource ordering:</b> number the forks; always pick up the lower-numbered fork first. One
+philosopher then reaches for forks in the opposite order, breaking the cycle. (Breaks circular wait.)</li>
+<li><b>Asymmetry:</b> odd philosophers grab left-then-right, even ones right-then-left.</li>
+<li><b>Limit diners:</b> allow at most 4 philosophers to sit at once (a counting semaphore init to 4),
+guaranteeing at least one can get both forks.</li>
+<li><b>Waiter/monitor:</b> a central arbiter grants forks only when both are free (pick up both or neither).</li>
+</ul>
+
+<pre class="long"><span class="ttl">Dining Philosophers — deadlock-free via resource ordering</span><span class="kw">void</span> philosopher(<span class="kw">int</span> i) {
+    <span class="kw">int</span> left = i, right = (i + 1) % 5;
+    <span class="kw">int</span> first = (left &lt; right) ? left : right;   <span class="cm">// always lower-numbered fork first</span>
+    <span class="kw">int</span> second = (left &lt; right) ? right : left;
+    <span class="kw">while</span> (1) {
+        think();
+        sem_wait(&amp;fork[first]);      <span class="cm">// consistent global order → no cycle → no deadlock</span>
+        sem_wait(&amp;fork[second]);
+        eat();
+        sem_post(&amp;fork[second]);
+        sem_post(&amp;fork[first]);
+    }
+}</pre>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+Dining Philosophers is really a deadlock question in disguise. Name the four Coffman conditions (Part
+VI) and show which your solution breaks: resource ordering and asymmetry break <b>circular wait</b>;
+"pick up both or neither" breaks <b>hold-and-wait</b>; the ≤4-diners rule ensures at least one
+philosopher can always proceed. Mentioning the Coffman connection is what earns the senior-level nod.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part V</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>State the three requirements a correct critical-section solution must satisfy.</li>
+      <li>What is the difference between a mutex and a semaphore? Between a binary semaphore and a mutex?</li>
+      <li>When is a spinlock the right choice, and when is it disastrous?</li>
+      <li>Why must a condition-variable wait be inside a <code>while</code> loop, not an <code>if</code>?</li>
+      <li>How do the two counting semaphores in producer&ndash;consumer differ in purpose?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>In producer&ndash;consumer, show exactly how swapping <code>wait(empty)</code> and
+      <code>lock(mutex)</code> causes deadlock.</li>
+      <li>Explain how the reader-preference readers&ndash;writers solution can starve a writer, and propose a fix.</li>
+      <li>For dining philosophers, prove that the resource-ordering solution cannot deadlock.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Implement a thread-safe bounded queue. Which primitives, and why?"</li>
+      <li>"You have a lock-free counter requirement. How would compare-and-swap help?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Mutex vs semaphore vs binary semaphore &middot; the producer&ndash;consumer semaphore solution and
+    its deadly ordering bug &middot; how each dining-philosophers fix breaks a Coffman condition.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Take your racing counter from Part III. Add a <code>pthread_mutex_t</code> around the increment and
+    confirm the result is now always exactly correct. Then <em>time</em> both versions — measure how
+    much the lock costs. You've now felt both correctness and the price of synchronization.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can implement producer&ndash;consumer,
+    readers&ndash;writers, and a deadlock-free dining philosophers from memory, and explain the purpose
+    of every <code>wait</code>/<code>signal</code> and lock in each.</p>
+  </div>
+</div>

@@ -1,0 +1,225 @@
+<!-- ===================== PART VIII CONTENT ===================== -->
+<h1 class="chapter" id="ch8" data-run="Virtual Memory"><span class="chnum">Part VIII</span>Virtual Memory</h1>
+
+<p class="lead">Paging (Part VII) let a process's memory be scattered across frames. Virtual memory
+takes the next leap: a page need not be in RAM at all. Keep only the pages a process is actively using
+in memory and park the rest on disk, and suddenly the machine can run far more than fits.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-1">What Is Virtual Memory, and Why?</h2>
+<p><b>What is it?</b> <span class="term">Virtual memory</span> is a technique that lets a process
+execute even when only <em>part</em> of it is in physical RAM; the rest lives on disk (in the swap
+area or the program file) and is brought in on demand. Each process gets a large virtual address space
+independent of how much RAM exists.</p>
+<p><b>Why?</b> (1) Programs can be larger than physical memory. (2) More processes fit in RAM at once
+(only their active pages are resident), raising CPU utilization and multiprogramming. (3) Less I/O to
+load a program — start running before it's fully loaded. (4) It cleanly enables per-process isolation
+and features like copy-on-write and memory-mapped files.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+Virtual memory works because programs exhibit <b>locality of reference</b>: at any moment a process
+touches only a small subset of its pages (its <em>working set</em>). Keep that hot subset in RAM and
+almost every access is a fast hit; the cold majority can sit on disk unnoticed.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-2">Demand Paging</h2>
+<p><b>Demand paging</b> is the usual implementation: don't load a page until it's actually referenced
+("load on demand"). Each page-table entry has a <b>valid/invalid (present) bit</b>. When a page is in
+RAM the bit says "valid" and translation proceeds normally. When the page is on disk the bit says
+"invalid," and touching it triggers a <b>page fault</b>.</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node u">CPU generates a virtual address</div>
+    <div class="arr">&darr;</div>
+    <div class="node">MMU checks the <b>TLB</b><span class="sub">hit &rarr; done fast</span></div>
+    <div class="arr">&darr; TLB miss</div>
+    <div class="node">Walk the <b>page table</b></div>
+    <div class="arr">&darr;</div>
+    <div class="node k">Present bit set? &rarr; get frame &rarr; <b>physical address</b> &rarr; RAM<span class="sub">not present &rarr; PAGE FAULT (next diagram)</span></div>
+  </div>
+  <figcaption>Address translation with virtual memory: TLB &rarr; page table &rarr; physical address, or a page fault.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-3">Page Faults and Their Handling</h2>
+<p>A <span class="term">page fault</span> is the exception raised when a process references a page that
+is not currently in RAM. It is <em>not</em> an error — it's the normal signal that the OS must fetch
+the page. Handling it:</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node">Reference to a page whose present bit = 0</div>
+    <div class="arr">&darr;</div>
+    <div class="node k">Hardware raises a <b>page fault</b> (trap into the OS)</div>
+    <div class="arr">&darr;</div>
+    <div class="node k">OS checks: legal address? &rarr; find a <b>free frame</b> (or evict one)</div>
+    <div class="arr">&darr;</div>
+    <div class="node hw">Read the page from <b>disk</b> into the frame</div>
+    <div class="arr">&darr;</div>
+    <div class="node">Update the <b>page table</b> (set frame + present bit) &amp; TLB</div>
+    <div class="arr">&darr;</div>
+    <div class="node u"><b>Restart</b> the faulting instruction — now it succeeds</div>
+  </div>
+  <figcaption>Page-fault handling. The instruction that faulted is re-executed after the page is loaded.</figcaption>
+</figure>
+
+<p><b>Cost.</b> A page fault is enormously expensive — a disk read is ~10<sup>5</sup>–10<sup>6</sup>×
+slower than a RAM access. So the <b>effective access time</b> is dominated by the fault rate:</p>
+<div class="formula">EAT = (1 &minus; p) &times; memory_access + p &times; page_fault_time</div>
+<p>With memory access 100&nbsp;ns and a page fault costing 8&nbsp;ms (8,000,000&nbsp;ns), even a fault
+probability of p = 0.001 gives EAT ≈ 100 + 0.001&times;8,000,000 = <b>8100&nbsp;ns</b> — 81× slower.
+This is why keeping the fault rate tiny (via good replacement and enough RAM) is everything.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-4">Page Replacement Algorithms</h2>
+<p>When a page fault occurs and no frame is free, the OS must <b>evict</b> a resident page to make
+room. Which one? A good choice minimizes future faults. We measure algorithms by counting page faults
+on a <b>reference string</b> (the sequence of page numbers a process touches).</p>
+
+<p><b>Shared example.</b> Reference string <span class="kv">1 2 3 4 1 2 5 1 2 3 4 5</span>, 3 frames.</p>
+
+<h3>FIFO — First-In, First-Out</h3>
+<p>Evict the page that has been in memory longest (oldest arrival). Simple; uses a queue. But "oldest"
+isn't "least useful," so it can evict a hot page.</p>
+<table class="avoid">
+<thead><tr><th>Ref</th><th class="c">1</th><th class="c">2</th><th class="c">3</th><th class="c">4</th><th class="c">1</th><th class="c">2</th><th class="c">5</th><th class="c">1</th><th class="c">2</th><th class="c">3</th><th class="c">4</th><th class="c">5</th></tr></thead>
+<tbody>
+<tr><td>Frame 1</td><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">4</td><td class="c">4</td><td class="c">4</td><td class="c">5</td><td class="c">5</td><td class="c">5</td><td class="c">5</td><td class="c">5</td><td class="c">5</td></tr>
+<tr><td>Frame 2</td><td class="c">&middot;</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">1</td><td class="c">3</td><td class="c">3</td><td class="c">3</td></tr>
+<tr><td>Frame 3</td><td class="c">&middot;</td><td class="c">&middot;</td><td class="c">3</td><td class="c">3</td><td class="c">3</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">4</td><td class="c">4</td></tr>
+<tr><td>Fault?</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">&middot;</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td></tr>
+</tbody>
+</table>
+<div class="formula">FIFO: <b>9 page faults</b> (3 hits)</div>
+
+<h3>Optimal (OPT / MIN)</h3>
+<p>Evict the page that <em>will not be used for the longest time in the future</em>. Provably the best
+possible — the fewest faults of any algorithm. It's unimplementable (needs the future), but it's the
+gold standard we compare against. On the same string, OPT gives <b>7 faults</b>.</p>
+
+<h3>LRU — Least Recently Used</h3>
+<p>Evict the page not used for the longest time in the <em>past</em>. A practical approximation of
+Optimal, banking on locality (the recent past predicts the near future). Costly to implement exactly
+(needs a timestamp or ordering per access). On the same string, LRU gives <b>10 faults</b> here.</p>
+
+<h3>Clock (Second-Chance)</h3>
+<p>A cheap LRU approximation used in real kernels. Frames sit in a circular list; each has a
+<b>reference bit</b> set on use. A "clock hand" sweeps: if the bit is 1, clear it and give the page a
+"second chance" (skip it); if 0, evict it. It approximates LRU with just one bit and no per-access
+bookkeeping.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — Belady's Anomaly</div>
+Intuitively, more frames should mean fewer faults. For <b>FIFO</b>, that can <em>fail</em>: on the
+string <span class="kv">1 2 3 4 1 2 5 1 2 3 4 5</span>, FIFO gives <b>9 faults with 3 frames</b> but
+<b>10 faults with 4 frames</b> — more memory, more faults! This is <b>Belady's anomaly</b>. It afflicts
+FIFO but never <b>stack algorithms</b> like LRU and Optimal (which guarantee the set of pages with k
+frames is always a subset of the set with k+1 frames).</div>
+
+<table class="avoid" style="width:70%">
+<thead><tr><th>Algorithm (3 frames)</th><th class="c">Page faults</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>Optimal</td><td class="c">7</td><td>Theoretical best</td></tr>
+<tr><td>FIFO</td><td class="c">9</td><td>Suffers Belady's anomaly</td></tr>
+<tr><td>LRU</td><td class="c">10</td><td>Approximates Optimal; no anomaly</td></tr>
+<tr><td>FIFO (4 frames)</td><td class="c">10</td><td>More frames, more faults!</td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-5">Thrashing, Working Set, and Locality</h2>
+<p><b>Locality of reference</b> is the empirical fact that processes access a small, slowly-changing
+set of pages at a time (loops reuse the same code; arrays are walked in order). Two flavors:
+<b>temporal</b> (a byte used now is likely used again soon) and <b>spatial</b> (nearby bytes are
+likely used soon). Locality is why caches and virtual memory work at all.</p>
+
+<p>The <b>working set</b> of a process is the set of pages it has referenced in the recent time window
+&mdash; essentially its current locality. If RAM can hold every process's working set, fault rates stay
+low. If it can't&hellip;</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — Thrashing</div>
+<b>Thrashing</b> is when a system spends more time paging (swapping pages in and out) than executing.
+It happens when the combined working sets exceed physical memory: every process constantly faults,
+evicting a page another process needs immediately, which faults again. CPU utilization collapses even
+though the CPU looks "busy" — busy doing I/O for paging. The fixes: reduce the multiprogramming level
+(run fewer processes), add RAM, or use the <b>working-set model</b>/page-fault-frequency control to
+give each process enough frames.</div>
+
+<figure class="diagram">
+<div class="asciiart">  CPU
+  util  │        ______
+        │       /      \____
+        │      /            \___  ← thrashing: utilization
+        │     /                 \___   collapses as paging
+        │    /                       \_  dominates
+        │___/________________________________
+              degree of multiprogramming →</div>
+<figcaption>Add processes and CPU utilization rises — until working sets no longer fit and thrashing crashes it.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-6">Copy-on-Write (COW)</h2>
+<p><b>What &amp; why.</b> Recall <code>fork()</code> (Part II) logically copies the parent's entire
+address space — wasteful, since the child often calls <code>exec()</code> immediately and discards it.
+<b>Copy-on-write</b> avoids the copy: parent and child <em>share</em> the same physical pages, marked
+read-only. As long as both only read, they share. The instant either <em>writes</em> a shared page,
+the MMU traps, and the OS makes a private copy of just that one page for the writer. Copying is
+deferred until (and only for pages) actually modified.</p>
+<figure class="diagram">
+<div class="asciiart">   After fork (COW):          After child writes page B:
+   Parent ─┐                  Parent ─┐
+           ├─▶ [A][B][C] RO           ├─▶ [A][B ][C]
+   Child ──┘   (shared)       Child ──┘        ▲
+                                       └─▶ [B'] copy made only for B</div>
+<figcaption>COW shares pages until a write forces a per-page copy — making <code>fork()</code> fast and lazy.</figcaption>
+</figure>
+<p>COW makes <code>fork()</code> nearly free and is used well beyond it — e.g. loading the same shared
+library into many processes without duplicating it in RAM.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s8-7">Memory-Mapped Files</h2>
+<p><b>What.</b> Instead of <code>read()</code>/<code>write()</code> system calls, a process can
+<code>mmap()</code> a file directly into its virtual address space, so the file appears as an array in
+memory. Accessing address <code>ptr[i]</code> reads byte <code>i</code> of the file; the OS demand-pages
+file contents in as you touch them and writes dirty pages back. <b>Why:</b> it avoids explicit I/O
+calls and extra copying, and it lets multiple processes share the same file pages in memory (the basis
+of shared memory IPC — Part XI, and of how executables/libraries load).</p>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part VIII</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>What is virtual memory and which property of programs makes it effective?</li>
+      <li>Describe the full sequence of events in handling a page fault.</li>
+      <li>Why is a page fault so much more expensive than a normal memory access?</li>
+      <li>What is Belady's anomaly, and which algorithms are immune to it?</li>
+      <li>Define thrashing and explain the working-set model's cure.</li>
+    </ol>
+    <h4>Application (solve fully)</h4>
+    <ol class="tight" start="6">
+      <li>Reference string <span class="kv">7 0 1 2 0 3 0 4 2 3 0 3 2</span>, 3 frames: count page faults under FIFO, LRU, and Optimal.</li>
+      <li>Memory access 100&nbsp;ns, page-fault service 5&nbsp;ms, fault rate 0.0005. Compute the effective access time.</li>
+      <li>Explain, step by step, how copy-on-write handles <code>fork()</code> followed by the child writing one global variable.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"What happens, in hardware and software, on a page fault?"</li>
+      <li>"Your server's throughput suddenly collapses and disk I/O spikes. What's likely happening and how do you fix it?" (Thrashing.)</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The page-fault handling flow &middot; FIFO vs LRU vs Optimal (and Belady) &middot; thrashing and
+    the working set &middot; how copy-on-write makes <code>fork()</code> cheap.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On Linux run <code>vmstat 1</code> and watch the <code>si</code>/<code>so</code> (swap-in/swap-out)
+    columns while opening many heavy apps. Nonzero, sustained values there are thrashing in action. Also
+    try <code>/usr/bin/time -v ./yourprog</code> and read "Major (requiring I/O) page faults."</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can trace any reference string through
+    FIFO/LRU/Optimal counting faults, explain and reproduce Belady's anomaly, and diagnose thrashing
+    from system metrics.</p>
+  </div>
+</div>
