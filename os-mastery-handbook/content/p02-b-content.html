@@ -1,0 +1,429 @@
+<!-- ===================== PART II CONTENT ===================== -->
+<h1 class="chapter" id="ch2" data-run="Processes"><span class="chnum">Part II</span>Processes</h1>
+
+<p class="lead">Everything a computer <em>does</em> for you happens inside a process. When you open a
+browser, compile code, or run a server, the OS creates processes, feeds them CPU time, gives each
+its own protected memory, and cleans up after them. Master the process and half of operating
+systems falls into place.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-1">Program vs Process</h2>
+
+<p><b>What is it?</b> A <span class="term">program</span> is a passive, static file on disk — a
+sequence of instructions and data (e.g. <code>/usr/bin/ls</code>). A <span class="term">process</span>
+is a program <em>in execution</em>: an active entity with its own memory, CPU registers, a program
+counter, open files, and a unique identity.</p>
+
+<p><b>Simple intuition.</b> A program is a <em>recipe</em> in a cookbook. A process is you actually
+<em>cooking</em> it — using a kitchen (memory), your hands (CPU), and a bookmark showing which step
+you are on (program counter). The same recipe can be cooked by two people at once in two kitchens:
+one program, two independent processes.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Program : Process = Recipe : Cooking.</b> One program can spawn many processes (open your terminal
+twice — two <code>bash</code> processes from one <code>bash</code> program). A process is a program
+<em>plus</em> its execution state: memory image, registers, PC, kernel bookkeeping.</div>
+
+<table class="avoid">
+<thead><tr><th style="width:26%">Aspect</th><th>Program</th><th>Process</th></tr></thead>
+<tbody>
+<tr><td>Nature</td><td>Passive / static</td><td>Active / dynamic</td></tr>
+<tr><td>Location</td><td>On disk (a file)</td><td>In memory (RAM), executing</td></tr>
+<tr><td>Lifetime</td><td>Exists until deleted</td><td>Exists from creation to termination</td></tr>
+<tr><td>Resources</td><td>None (just bytes)</td><td>CPU time, memory, open files, PID</td></tr>
+<tr><td>Count</td><td>One file</td><td>Many processes from the same program</td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-2">The Process Address Space</h2>
+<p>When the OS launches a process, it gives it a private <b>virtual address space</b> — a fresh,
+protected view of memory the process believes is entirely its own. That space is organized into
+segments. Knowing this layout explains stack overflows, <code>malloc</code>, and countless bugs.</p>
+
+<figure class="diagram">
+<div class="asciiart">   high addresses
+  ┌───────────────────────────┐
+  │   STACK                   │  local variables, function-call frames,
+  │      │ grows downward     │  return addresses, saved registers
+  │      ▼                    │
+  ├───────────────────────────┤
+  │        (free gap)         │  stack and heap grow toward each other
+  ├───────────────────────────┤
+  │      ▲                    │
+  │      │ grows upward       │
+  │   HEAP                    │  dynamic memory: malloc / new
+  ├───────────────────────────┤
+  │   BSS                     │  uninitialized globals  (zero-filled)
+  ├───────────────────────────┤
+  │   DATA                    │  initialized globals / static variables
+  ├───────────────────────────┤
+  │   TEXT (code)             │  the program's machine instructions (read-only)
+  └───────────────────────────┘
+   low addresses</div>
+<figcaption>A process's virtual address space. Text/data come from the program file; heap and stack
+grow at run time.</figcaption>
+</figure>
+
+<dl>
+<dt>Text</dt><dd>The machine code. Read-only (so it can be shared between processes running the same
+program) and protected from accidental writes.</dd>
+<dt>Data / BSS</dt><dd>Global and static variables. Data holds initialized ones; BSS holds
+zero-initialized ones (stored compactly as "reserve N zero bytes").</dd>
+<dt>Heap</dt><dd>Dynamically allocated memory (<code>malloc</code>/<code>new</code>). Grows upward as
+you allocate; managed by the allocator on top of the <code>brk</code>/<code>mmap</code> syscalls.</dd>
+<dt>Stack</dt><dd>Function call frames: local variables, arguments, return addresses. Grows downward;
+automatically freed as functions return.</dd>
+</dl>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Confusing <b>stack</b> and <b>heap</b>. Locals live on the <em>stack</em> and vanish when the
+function returns — returning a pointer to a local is a bug. <code>malloc</code>'d memory lives on the
+<em>heap</em> and survives until you <code>free</code> it — forgetting to free is a memory leak.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-3">The Process Control Block (PCB)</h2>
+
+<p><b>What is it?</b> The <span class="term">Process Control Block</span> is the kernel's data
+structure that stores <em>everything</em> the OS needs to know about a process. One PCB exists per
+process; it <em>is</em> the process, as far as the kernel is concerned. (In Linux the PCB is
+<code>struct task_struct</code>.)</p>
+
+<p><b>Why do we need it?</b> The CPU can run only one process at a time per core. To pause process A
+and later resume it exactly where it left off, the OS must save A's complete state somewhere — that
+somewhere is the PCB.</p>
+
+<figure class="diagram">
+<div class="asciiart">   ┌──────────────── PCB (task_struct) ─────────────────┐
+   │ PID / PPID          process & parent identifiers    │
+   │ Process state       ready / running / waiting / ... │
+   │ Program counter     address of next instruction     │
+   │ CPU registers       saved register snapshot          │
+   │ Scheduling info     priority, time slice, queue      │
+   │ Memory management    page tables, segment pointers   │
+   │ Open file table     file descriptors → open files    │
+   │ Accounting          CPU time used, limits            │
+   │ I/O status          devices held, pending I/O        │
+   │ Credentials         user/group IDs, permissions      │
+   └─────────────────────────────────────────────────────┘</div>
+<figcaption>The PCB: the kernel's complete record of one process. Saving/restoring it is the essence
+of a context switch.</figcaption>
+</figure>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+The PCB is the anchor for three big ideas at once: <b>context switching</b> (save/restore its
+registers &amp; PC), <b>scheduling</b> (its state and priority determine what runs next), and
+<b>isolation</b> (its memory-management fields point to a private address space). The kernel keeps
+all PCBs in lists/queues so it can find and manage every process.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-4">Process States and Transitions</h2>
+
+<p>A process is not always running — most of the time it is waiting for something (the CPU, or an
+I/O device). The OS models this with a small set of <b>states</b>. The five-state model is the one to
+know cold.</p>
+
+<dl>
+<dt>New</dt><dd>The process is being created (PCB allocated, memory being set up).</dd>
+<dt>Ready</dt><dd>Loaded and willing to run — just waiting for the CPU. Sits in the <b>ready queue</b>.</dd>
+<dt>Running</dt><dd>Currently executing on a CPU. Only one process per core is here at any instant.</dd>
+<dt>Waiting / Blocked</dt><dd>Cannot proceed until some event happens (disk read completes, a lock is
+released, input arrives). Not competing for the CPU.</dd>
+<dt>Terminated</dt><dd>Finished executing; the OS is reclaiming its resources.</dd>
+</dl>
+
+<figure class="diagram">
+<div class="asciiart">        admitted            dispatch (scheduler picks it)
+  NEW ───────────▶ READY ─────────────────────▶ RUNNING
+                     ▲                              │  │
+      I/O or event   │                              │  │ exit
+      completes      │        timer interrupt /     │  ▼
+                     │        preempted (yield CPU)  │  TERMINATED
+                     │◀─────────────────────────────┘  │
+                     │                                  │
+                   WAITING ◀───────────────────────────┘
+                              needs I/O / waits on event</div>
+<figcaption>The five-state process model. Transitions are driven by the scheduler, timer interrupts,
+and I/O events.</figcaption>
+</figure>
+
+<p><b>The key transitions:</b></p>
+<ul class="tight">
+<li><b>Ready &rarr; Running</b> (<em>dispatch</em>): the scheduler selects the process and gives it the CPU.</li>
+<li><b>Running &rarr; Ready</b> (<em>preemption</em>): its time slice expired, or a higher-priority
+process arrived. It is still runnable — just paused.</li>
+<li><b>Running &rarr; Waiting</b> (<em>block</em>): it requested I/O or a resource that is not ready.
+It voluntarily gives up the CPU.</li>
+<li><b>Waiting &rarr; Ready</b> (<em>wakeup</em>): the awaited event happened; it rejoins the ready queue
+(note: it does <em>not</em> go straight to Running).</li>
+<li><b>Running &rarr; Terminated</b>: it called <code>exit()</code> or was killed.</li>
+</ul>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Thinking a process goes Waiting &rarr; Running directly when its I/O finishes. It does not — it goes
+Waiting &rarr; <b>Ready</b>, then must be <em>scheduled</em> before it runs. The CPU might be busy with
+someone else. This distinction matters in scheduling questions.</div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+Draw the five-state diagram and name every transition <em>and its cause</em>. Then mention that real
+kernels add states: Linux has <code>TASK_RUNNING</code> (covers ready+running),
+<code>TASK_INTERRUPTIBLE</code>/<code>UNINTERRUPTIBLE</code> (two flavors of waiting), and
+<code>TASK_ZOMBIE</code>. Naming real kernel states signals depth.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-5">Process Creation with fork()</h2>
+
+<p><b>What is it?</b> On UNIX/Linux, new processes are born by <b>cloning</b>. The
+<code>fork()</code> system call creates a near-exact copy of the calling process. The original is the
+<b>parent</b>; the copy is the <b>child</b>. This builds a <b>process tree</b> rooted at PID 1
+(<code>init</code>/<code>systemd</code>).</p>
+
+<p><b>The famous trick — one call, two returns.</b> <code>fork()</code> is called once but returns
+<em>twice</em>: once in the parent (returning the child's PID) and once in the child (returning 0).
+That return value is how each copy knows who it is.</p>
+
+<pre class="long"><span class="ttl">fork() — one call, two processes</span><span class="kw">#include</span> &lt;stdio.h&gt;
+<span class="kw">#include</span> &lt;unistd.h&gt;
+<span class="kw">#include</span> &lt;sys/wait.h&gt;
+
+<span class="kw">int</span> main(<span class="kw">void</span>) {
+    pid_t pid = fork();              <span class="cm">// clone this process here</span>
+
+    <span class="kw">if</span> (pid &lt; 0) {
+        perror(<span class="st">"fork failed"</span>);   <span class="cm">// no child was created</span>
+    } <span class="kw">else if</span> (pid == 0) {
+        printf(<span class="st">"Child : my PID=%d, parent=%d\n"</span>, getpid(), getppid());
+    } <span class="kw">else</span> {
+        printf(<span class="st">"Parent: my PID=%d, child=%d\n"</span>, getpid(), pid);
+        wait(NULL);                 <span class="cm">// wait for the child to finish</span>
+    }
+    <span class="kw">return</span> 0;
+}</pre>
+
+<p><b>How it works internally.</b> The kernel allocates a new PCB, copies the parent's state (open
+files, credentials, and a logical copy of its address space), assigns a new PID, and marks the child
+<em>Ready</em>. Copying all of memory would be wasteful, so modern kernels use <b>copy-on-write
+(COW)</b>: parent and child share the same physical pages, marked read-only; only when one writes
+does the kernel duplicate that page. This makes <code>fork()</code> cheap. (COW returns in Part VIII.)</p>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Assuming the parent runs before the child (or vice versa). After <code>fork()</code>, both are
+<em>Ready</em> and the scheduler decides the order — it is nondeterministic. Never write code that
+depends on which runs first; use <code>wait()</code> or synchronization if order matters.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-6">Running a New Program with exec()</h2>
+
+<p><code>fork()</code> gives you a copy of the <em>same</em> program. To run a <em>different</em>
+program, the child calls a member of the <code>exec()</code> family (<code>execl</code>,
+<code>execvp</code>, <code>execve</code>&hellip;). <code>exec()</code> <b>replaces</b> the current
+process's memory image with a new program — same PID, brand-new text/data/heap/stack. It does
+<em>not</em> return on success (there is nothing to return to; the old program is gone).</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — the fork/exec pattern</div>
+This is how every shell launches every command: <b>fork</b> to create a child, then <b>exec</b> in
+the child to become the desired program, while the parent <b>wait</b>s. Separating "create a process"
+(<code>fork</code>) from "run a program" (<code>exec</code>) is a deliberate, powerful UNIX design —
+between the two, the child can redirect I/O, close files, or set up pipes (Part XI).</div>
+
+<pre class="long"><span class="ttl">fork + exec + wait: how a shell runs "ls -l"</span>pid_t pid = fork();
+<span class="kw">if</span> (pid == 0) {                       <span class="cm">// --- child ---</span>
+    execlp(<span class="st">"ls"</span>, <span class="st">"ls"</span>, <span class="st">"-l"</span>, NULL);   <span class="cm">// become 'ls'; never returns if OK</span>
+    perror(<span class="st">"exec failed"</span>);            <span class="cm">// only reached on error</span>
+    _exit(1);
+} <span class="kw">else</span> {                              <span class="cm">// --- parent (the shell) ---</span>
+    <span class="kw">int</span> status;
+    waitpid(pid, &amp;status, 0);          <span class="cm">// block until child finishes</span>
+    printf(<span class="st">"child exited with %d\n"</span>, WEXITSTATUS(status));
+}</pre>
+
+<figure class="diagram">
+  <div class="flow">
+    <div class="node">Shell (parent)</div>
+    <div class="arr">&rarr;<span class="sub">fork()</span></div>
+    <div class="node u">Child = copy of shell</div>
+    <div class="arr">&rarr;<span class="sub">exec("ls")</span></div>
+    <div class="node u">Child is now <code>ls</code></div>
+    <div class="arr">&rarr;<span class="sub">exit()</span></div>
+    <div class="node k">Parent's wait() returns</div>
+  </div>
+  <figcaption>The universal fork &rarr; exec &rarr; wait lifecycle behind every shell command.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-7">Termination and wait()</h2>
+<p>A process ends by calling <code>exit(status)</code> (voluntary) or by receiving a fatal signal
+like <code>SIGKILL</code> (involuntary). On termination the kernel closes the process's files, frees
+its memory, and keeps a small <b>exit status</b> around so the parent can learn how the child fared.</p>
+
+<p>The parent collects that status with <code>wait()</code>/<code>waitpid()</code>. This is called
+<b>reaping</b>. Until the parent reaps it, the dead child lingers as a <b>zombie</b> (next section).
+<code>wait()</code> also lets a parent <em>synchronize</em> with a child — blocking until it finishes.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-8">Zombies, Orphans, and Daemons</h2>
+<p>Three special process conditions that interviewers love and beginners confuse. Learn them as a set.</p>
+
+<h3>Zombie Process</h3>
+<p><b>What:</b> a child that has <em>terminated</em> but whose parent has not yet <code>wait()</code>ed
+for it. It is dead but still occupies a PCB slot (holding its exit status). <b>Why it exists:</b> so
+the parent can still read the exit status after the child is gone. <b>Danger:</b> a parent that never
+reaps its children leaks PCB entries; enough zombies can exhaust the process table. <b>Fix:</b> the
+parent must <code>wait()</code>, or handle <code>SIGCHLD</code>.</p>
+
+<pre><span class="ttl">Creating (and observing) a zombie</span>pid_t pid = fork();
+<span class="kw">if</span> (pid == 0) {
+    _exit(0);              <span class="cm">// child dies immediately</span>
+} <span class="kw">else</span> {
+    sleep(30);             <span class="cm">// parent naps WITHOUT wait() -&gt; child is a zombie</span>
+    <span class="cm">// run 'ps aux | grep defunct' now: you'll see it as &lt;defunct&gt;</span>
+}</pre>
+
+<h3>Orphan Process</h3>
+<p><b>What:</b> a child whose <em>parent terminated first</em>, leaving the child still running.
+<b>Who adopts it:</b> the kernel <b>reparents</b> orphans to <code>init</code>/<code>systemd</code>
+(PID 1), which dutifully reaps them when they finish. So orphans are harmless — they always get a
+responsible foster parent.</p>
+
+<h3>Daemon Process</h3>
+<p><b>What:</b> a long-running <em>background service</em> with no controlling terminal — web servers,
+<code>sshd</code>, <code>cron</code>. <b>How it is made:</b> a process <code>fork</code>s, the parent
+exits (so the child becomes an orphan adopted by PID 1), and the child calls <code>setsid()</code> to
+start a new session, detaching from any terminal. The trailing <b>d</b> in names like
+<code>sshd</code>, <code>httpd</code>, <code>systemd</code> means "daemon."</p>
+
+<table class="avoid">
+<thead><tr><th style="width:18%">Type</th><th>State</th><th>Parent</th><th>Problem?</th></tr></thead>
+<tbody>
+<tr><td><b>Zombie</b></td><td>Dead, not yet reaped</td><td>Alive but hasn't waited</td><td>Yes — leaks PCB slots</td></tr>
+<tr><td><b>Orphan</b></td><td>Still running</td><td>Dead; adopted by PID 1</td><td>No — PID 1 reaps it</td></tr>
+<tr><td><b>Daemon</b></td><td>Running (background)</td><td>PID 1 (intentionally)</td><td>No — by design</td></tr>
+</tbody>
+</table>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"You kill a zombie with <code>kill -9</code>." You cannot — it is already dead; there is nothing to
+kill. A zombie disappears when its <em>parent</em> reaps it. If the parent won't, kill the
+<em>parent</em>; the zombie is then reparented to PID 1, which reaps it instantly.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-9">Context Switching</h2>
+
+<p><b>What is it?</b> A <span class="term">context switch</span> is the act of saving the state of the
+currently running process and restoring the state of another, so the CPU can switch from running
+process A to process B. It is the mechanism that makes one CPU appear to run many processes at once.</p>
+
+<p><b>Simple intuition.</b> A single receptionist (CPU) serving many customers (processes). To switch
+customers, the receptionist writes down exactly where they left off with customer A (save context),
+pulls out customer B's file (restore context), and continues. The note-taking itself takes time and
+serves no customer — that is <b>overhead</b>.</p>
+
+<p><b>How it works internally.</b> Triggered by a timer interrupt (preemption), a blocking system
+call, or a higher-priority wakeup, the kernel:</p>
+<ol class="tight">
+<li>Saves the CPU registers and program counter of A into A's PCB.</li>
+<li>Updates A's state (Running &rarr; Ready or Waiting) and picks B via the scheduler.</li>
+<li>Loads B's registers, PC, and memory context (switches page tables / address space) from B's PCB.</li>
+<li>Returns to user mode; B resumes exactly where it last stopped.</li>
+</ol>
+
+<figure class="diagram">
+<div class="asciiart">  Process A running          kernel (switch)          Process B running
+  ─────────────────▶  interrupt/syscall  ─────────────────▶
+        │  save A's registers → PCB(A)                    ▲
+        │  scheduler picks B                              │
+        └── load PCB(B) → registers ──────────────────────┘
+             ◀── CPU idle to real work: this gap = overhead ──▶</div>
+<figcaption>A context switch. The shaded gap does no useful application work — pure overhead.</figcaption>
+</figure>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Why does context switching have overhead?" Two reasons: (1) the direct cost of saving/restoring
+registers and switching address spaces, and (2) the <em>indirect</em> cost — the new process starts
+with cold CPU caches and TLB (which may be flushed), so it runs slower until they warm up. This is
+why excessive switching (e.g. too many threads) hurts performance. Switching between <em>threads</em>
+of one process is cheaper: same address space, so no page-table switch or full TLB flush.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-10">Scheduling Queues, CPU Bursts, and I/O Bursts</h2>
+<p>The OS keeps processes organized in queues as they move between states:</p>
+<ul class="tight">
+<li><b>Job queue</b> — all processes in the system.</li>
+<li><b>Ready queue</b> — processes in memory, Ready, waiting for the CPU.</li>
+<li><b>Device / wait queues</b> — one per device; processes blocked on that device's I/O.</li>
+</ul>
+<p>A process's life alternates between two kinds of activity:</p>
+<dl>
+<dt>CPU burst</dt><dd>A stretch of computation using the CPU.</dd>
+<dt>I/O burst</dt><dd>A stretch of waiting for input/output (disk, network, user).</dd>
+</dl>
+<p>This <b>CPU–I/O burst cycle</b> is fundamental to scheduling (Part IV). <b>CPU-bound</b> processes
+(e.g. video encoding) have long CPU bursts; <b>I/O-bound</b> processes (e.g. a text editor) have short
+CPU bursts and lots of waiting. Good schedulers favor I/O-bound processes to keep devices busy.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-11">Process Isolation</h2>
+<p><b>What &amp; why.</b> Each process gets its own virtual address space, so process A literally
+cannot see or corrupt process B's memory — a wild pointer in A crashes only A. This
+<span class="term">isolation</span> is enforced by the hardware MMU (Part VII) under the kernel's
+control, and it is the reason one misbehaving app doesn't take down your whole machine.</p>
+<p>Isolation is a double-edged sword: it keeps processes safe from each other, but it also means they
+cannot casually share data. To communicate, they need explicit, kernel-mediated mechanisms — which is
+exactly what <b>inter-process communication</b> provides.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s2-12">Inter-Process Communication (Overview)</h2>
+<p>Because processes are isolated, the OS offers controlled channels for them to exchange data. There
+are two broad families:</p>
+<ul class="tight">
+<li><b>Shared memory</b> — two processes map the same region of physical memory; fastest, but they
+must synchronize access themselves.</li>
+<li><b>Message passing</b> — processes send/receive discrete messages via the kernel (pipes, message
+queues, sockets); safer and simpler, but involves copying and system calls.</li>
+</ul>
+<p>The full toolkit — pipes, named pipes, message queues, shared memory, signals, sockets, and RPC —
+with working C examples is <b>Part XI</b>. For now, just hold the idea: <em>isolation is the default;
+IPC is how you deliberately poke holes in it.</em></p>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part II</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Give the recipe/cooking analogy for program vs process and state what a process has that a program lacks.</li>
+      <li>Name the four main segments of a process address space and what each holds.</li>
+      <li>List the five process states and the cause of every transition between them.</li>
+      <li>What is stored in a PCB, and why is it central to context switching?</li>
+      <li>Define zombie, orphan, and daemon in one sentence each.</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>A <code>fork()</code>'d program prints a line before and after the fork. If the line before
+      says "start" and the line after says "hi", how many total lines are printed and why?</li>
+      <li>Your server spawns worker children but never calls <code>wait()</code>. After a day it can't
+      create new processes. Diagnose the bug and give two fixes.</li>
+      <li>Explain why switching between two threads of one process is cheaper than switching between
+      two processes.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Why does <code>fork()</code> return twice, and how does copy-on-write make it cheap?"</li>
+      <li>"Walk me through exactly what happens, step by step, when a shell runs <code>grep foo file</code>."</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The five-state diagram with every transition &middot; the fork/exec/wait pattern &middot; what a
+    context switch saves and restores (and why it has overhead) &middot; zombie vs orphan.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Compile the <code>fork()</code> example. Then write a version where the child <code>_exit</code>s
+    and the parent <code>sleep</code>s for 20 s without <code>wait()</code>. While it sleeps, run
+    <code>ps -el | grep defunct</code> in another terminal and find your zombie. Then add
+    <code>wait(NULL)</code> and confirm the zombie is gone.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can write a fork/exec/wait program from
+    scratch, predict its output, explain the process tree it creates, and describe what the kernel
+    does to its PCBs at each step.</p>
+  </div>
+</div>

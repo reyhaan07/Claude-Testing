@@ -233,14 +233,17 @@ figcaption { font-family:"DejaVu Sans",sans-serif; font-size: 8.4pt; color: var(
 .flow .sub { display:block; font-weight:400; font-size:7.6pt; color: var(--muted); }
 
 /* ---------- Gantt chart ---------- */
-.gantt { display: flex; margin: .5em 0 .2em; break-inside: avoid; font-family:"DejaVu Sans",sans-serif; }
-.gantt .seg { border: 1px solid var(--primary); border-right: none; padding: 5pt 2pt;
-  text-align: center; font-size: 8.6pt; font-weight:700; color: var(--primary);
-  background: #eaf1fa; position: relative; }
-.gantt .seg:last-child { border-right: 1px solid var(--primary); }
-.gantt .seg.idle { background: #efe1e1; color:#8a4b4b; border-color:#b98a8a; }
-.gantt-ticks { display:flex; font-family:"DejaVu Sans Mono",monospace; font-size: 7.8pt; color: var(--muted); margin-bottom:.6em; }
-.gantt-ticks span { text-align: left; margin-left:-3pt; }
+.gantt { display: flex; margin: .6em 0 20pt; break-inside: avoid;
+  font-family:"DejaVu Sans",sans-serif; }
+.gantt .seg { border: 1.2px solid var(--primary); border-right: none; padding: 6pt 2pt;
+  text-align: center; font-size: 8.8pt; font-weight:700; color: var(--primary);
+  background: #eaf1fa; position: relative; min-width: 16pt; }
+.gantt .seg:last-child { border-right: 1.2px solid var(--primary); }
+.gantt .seg.idle { background: #efe1e1; color:#9a5b5b; border-color:#c39a9a; font-weight:400; }
+.gantt .seg .tk  { position:absolute; bottom:-14pt; left:-3pt; font-family:"DejaVu Sans Mono",monospace;
+  font-size:7.6pt; font-weight:400; color: var(--muted); }
+.gantt .seg .tke { position:absolute; bottom:-14pt; right:-5pt; font-family:"DejaVu Sans Mono",monospace;
+  font-size:7.6pt; font-weight:400; color: var(--muted); }
 
 /* ---------- Checkpoint block ---------- */
 .checkpoint {

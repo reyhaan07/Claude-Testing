@@ -1,0 +1,326 @@
+<!-- ===================== PART IV CONTENT ===================== -->
+<h1 class="chapter" id="ch4" data-run="CPU Scheduling"><span class="chnum">Part IV</span>CPU Scheduling</h1>
+
+<p class="lead">CPU scheduling is where operating-systems theory becomes arithmetic you can be tested
+on. This part teaches every classic algorithm the way an interviewer or examiner wants it: the
+intuition, the mechanism, a Gantt chart, and the full turnaround/waiting-time calculation worked to
+the last number.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-1">Why CPU Scheduling? The Metrics</h2>
+<p>A process alternates CPU bursts with I/O bursts (Part II). While one process waits on I/O, the CPU
+would sit idle — a waste. The <b>scheduler</b> keeps the CPU busy by picking another Ready process to
+run. The <b>dispatcher</b> is the component that actually performs the context switch to hand the CPU
+over. The rules the scheduler follows are the <b>scheduling algorithm</b>, and we judge algorithms by
+these metrics:</p>
+
+<table class="avoid">
+<thead><tr><th style="width:22%">Metric</th><th style="width:44%">Definition</th><th>Goal</th></tr></thead>
+<tbody>
+<tr><td>Arrival Time (AT)</td><td>When the process enters the ready queue</td><td>&mdash; (given)</td></tr>
+<tr><td>Burst Time (BT)</td><td>CPU time the process needs</td><td>&mdash; (given)</td></tr>
+<tr><td>Completion Time (CT)</td><td>When the process finishes</td><td>&mdash; (computed)</td></tr>
+<tr><td><b>Turnaround Time</b></td><td>TAT = CT &minus; AT (total time in system)</td><td class="c">Minimize</td></tr>
+<tr><td><b>Waiting Time</b></td><td>WT = TAT &minus; BT (time spent waiting in ready queue)</td><td class="c">Minimize</td></tr>
+<tr><td><b>Response Time</b></td><td>RT = (first time on CPU) &minus; AT</td><td class="c">Minimize</td></tr>
+<tr><td>Throughput</td><td>Processes completed per unit time</td><td class="c">Maximize</td></tr>
+<tr><td>CPU Utilization</td><td>Fraction of time the CPU is busy</td><td class="c">Maximize</td></tr>
+<tr><td>Fairness</td><td>No process is unduly denied the CPU</td><td class="c">Maximize</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — the three formulas that solve every problem</div>
+<div class="formula"><b>Turnaround Time</b> = Completion Time &minus; Arrival Time</div>
+<div class="formula"><b>Waiting Time</b> = Turnaround Time &minus; Burst Time</div>
+<div class="formula"><b>Response Time</b> = First-CPU Time &minus; Arrival Time</div>
+Build the Gantt chart first, read off each Completion Time, then apply these. Every numerical in this
+part — and in your exam — is just these three lines applied carefully.</div>
+
+<h3>Two problems to watch for</h3>
+<dl>
+<dt>Starvation</dt><dd>A process waits indefinitely because others keep being preferred (common with
+priority and SJF, where a low-priority or long job may never get picked).</dd>
+<dt>Convoy effect</dt><dd>Short processes stuck waiting behind one long process (classic FCFS problem),
+tanking average waiting time — like a line of cars stuck behind one slow truck.</dd>
+</dl>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-2">Preemptive vs Non-Preemptive</h2>
+<table class="avoid">
+<thead><tr><th style="width:24%">Aspect</th><th>Non-Preemptive</th><th>Preemptive</th></tr></thead>
+<tbody>
+<tr><td>CPU taken away?</td><td>No — a process runs until it finishes or blocks</td><td>Yes — the OS can forcibly pause a running process</td></tr>
+<tr><td>Triggered by</td><td>Process exits or requests I/O</td><td>Timer interrupt, higher-priority arrival</td></tr>
+<tr><td>Responsiveness</td><td>Poorer (long job blocks others)</td><td>Better (can react to new/urgent work)</td></tr>
+<tr><td>Overhead</td><td>Lower (fewer switches)</td><td>Higher (more context switches)</td></tr>
+<tr><td>Examples</td><td>FCFS, SJF, non-preemptive Priority</td><td>SRTF, Round Robin, preemptive Priority</td></tr>
+</tbody>
+</table>
+<p>Modern general-purpose OSes are <b>preemptive</b> — essential for interactivity and to stop any one
+process from hogging the CPU.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-3">FCFS — First-Come, First-Served</h2>
+<p><b>Intuition.</b> A queue at a shop: serve whoever arrives first, to completion. <b>Working.</b>
+Non-preemptive; the ready queue is a simple FIFO. Simplest possible policy.</p>
+
+<p><b>Worked example.</b> Four processes:</p>
+<table class="avoid" style="width:60%">
+<thead><tr><th>Process</th><th class="c">Arrival</th><th class="c">Burst</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">5</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">3</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">8</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">6</td></tr>
+</tbody>
+</table>
+
+<p>Order of service = order of arrival: P1, P2, P3, P4.</p>
+<div class="gantt">
+  <div class="seg" style="flex:5"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:3">P2</div>
+  <div class="seg" style="flex:8">P3</div>
+  <div class="seg" style="flex:6">P4<span class="tke">22</span></div>
+</div>
+<div class="small" style="margin:-8pt 0 8pt;">Boundaries: P1 0&rarr;5, P2 5&rarr;8, P3 8&rarr;16, P4 16&rarr;22.</div>
+
+<table class="avoid">
+<thead><tr><th>Process</th><th class="c">AT</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT = CT&minus;AT</th><th class="c">WT = TAT&minus;BT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">5</td><td class="c">5</td><td class="c">5</td><td class="c">0</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">3</td><td class="c">8</td><td class="c">7</td><td class="c">4</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">8</td><td class="c">16</td><td class="c">14</td><td class="c">6</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">6</td><td class="c">22</td><td class="c">19</td><td class="c">13</td></tr>
+</tbody>
+</table>
+<div class="formula">Average TAT = (5+7+14+19)/4 = <b>11.25</b> &emsp;&emsp; Average WT = (0+4+6+13)/4 = <b>5.75</b></div>
+
+<p><b>+</b> Simple, fair in arrival order, no starvation. <b>&minus;</b> The <b>convoy effect</b>: put
+a long job first and every short job waits behind it, ballooning average waiting time. Non-preemptive,
+so bad for interactivity.</p>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Forgetting idle time. If no process has arrived yet, the CPU sits idle and the timeline still advances.
+E.g. if P1 arrives at t=3 with nothing before it, the Gantt starts with idle [0&rarr;3], and P1's
+completion is 3+BT, not BT.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-4">SJF — Shortest Job First (Non-Preemptive)</h2>
+<p><b>Intuition.</b> Always run the Ready process with the <em>smallest</em> CPU burst next. Clearing
+the quick jobs first drags the average waiting time down. <b>SJF is provably optimal</b> for minimum
+average waiting time — among non-preemptive algorithms, no policy beats it.</p>
+
+<p><b>Worked example</b> (all arrive at t=0 for clarity): P1 BT=6, P2 BT=8, P3 BT=7, P4 BT=3.
+Pick shortest first: P4(3), P1(6), P3(7), P2(8).</p>
+<div class="gantt">
+  <div class="seg" style="flex:3"><span class="tk">0</span>P4</div>
+  <div class="seg" style="flex:6">P1</div>
+  <div class="seg" style="flex:7">P3</div>
+  <div class="seg" style="flex:8">P2<span class="tke">24</span></div>
+</div>
+<div class="small" style="margin:-8pt 0 8pt;">Boundaries: P4 0&rarr;3, P1 3&rarr;9, P3 9&rarr;16, P2 16&rarr;24.</div>
+
+<table class="avoid">
+<thead><tr><th>Process</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th></tr></thead>
+<tbody>
+<tr><td>P4</td><td class="c">3</td><td class="c">3</td><td class="c">3</td><td class="c">0</td></tr>
+<tr><td>P1</td><td class="c">6</td><td class="c">9</td><td class="c">9</td><td class="c">3</td></tr>
+<tr><td>P3</td><td class="c">7</td><td class="c">16</td><td class="c">16</td><td class="c">9</td></tr>
+<tr><td>P2</td><td class="c">8</td><td class="c">24</td><td class="c">24</td><td class="c">16</td></tr>
+</tbody>
+</table>
+<div class="formula">Average WT = (0+3+9+16)/4 = <b>7.0</b> &emsp; (FCFS on the same set gives 10.25 — SJF wins)</div>
+
+<p><b>+</b> Optimal average waiting time. <b>&minus;</b> Requires knowing burst times in advance
+(impossible in general — the OS must <em>estimate</em> them, e.g. exponential averaging of past
+bursts); risks <b>starvation</b> of long jobs if short jobs keep arriving.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-5">SRTF — Shortest Remaining Time First (Preemptive SJF)</h2>
+<p><b>Intuition.</b> The preemptive version of SJF: whenever a new process arrives, compare its burst
+against the <em>remaining</em> time of the running process; if the newcomer is shorter, preempt.
+Decisions are re-made at every arrival.</p>
+
+<p><b>Worked example:</b> P1(AT=0,BT=8), P2(AT=1,BT=4), P3(AT=2,BT=9), P4(AT=3,BT=5).</p>
+<ul class="tight small">
+<li>t=0: only P1 &rarr; run P1.</li>
+<li>t=1: P2(4) arrives; P1 remaining=7. 4&lt;7 &rarr; preempt, run P2.</li>
+<li>t=2,3: P3(9), P4(5) arrive; P2 remaining (3, then 2) still smallest &rarr; keep P2.</li>
+<li>t=5: P2 done. Remaining P1=7, P3=9, P4=5 &rarr; run P4 (5).</li>
+<li>t=10: P4 done. Remaining P1=7, P3=9 &rarr; run P1 (7).</li>
+<li>t=17: P1 done. Run P3 (9) &rarr; done at 26.</li>
+</ul>
+<div class="gantt">
+  <div class="seg" style="flex:1"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:4">P2</div>
+  <div class="seg" style="flex:5">P4</div>
+  <div class="seg" style="flex:7">P1</div>
+  <div class="seg" style="flex:9">P3<span class="tke">26</span></div>
+</div>
+<div class="small" style="margin:-8pt 0 8pt;">Boundaries: P1 0&rarr;1, P2 1&rarr;5, P4 5&rarr;10, P1 10&rarr;17, P3 17&rarr;26.</div>
+
+<table class="avoid">
+<thead><tr><th>Process</th><th class="c">AT</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">8</td><td class="c">17</td><td class="c">17</td><td class="c">9</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">4</td><td class="c">5</td><td class="c">4</td><td class="c">0</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">9</td><td class="c">26</td><td class="c">24</td><td class="c">15</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">5</td><td class="c">10</td><td class="c">7</td><td class="c">2</td></tr>
+</tbody>
+</table>
+<div class="formula">Average WT = (9+0+15+2)/4 = <b>6.5</b> &emsp;&emsp; Average TAT = (17+4+24+7)/4 = <b>13.0</b></div>
+<p><b>+</b> Lowest possible average waiting time of all these algorithms. <b>&minus;</b> Heavy
+preemption overhead; still needs burst estimates; worst starvation risk for long jobs.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-6">Priority Scheduling</h2>
+<p><b>Intuition.</b> Each process has a priority number; the CPU always goes to the highest-priority
+Ready process. (Convention here: <em>smaller number = higher priority</em>.) Can be preemptive or
+non-preemptive. SJF is actually priority scheduling with priority = 1/burst.</p>
+
+<p><b>Worked example</b> (non-preemptive, all AT=0): P1(BT=4,pri=3), P2(BT=3,pri=1),
+P3(BT=1,pri=4), P4(BT=5,pri=2). Order by priority: P2, P4, P1, P3.</p>
+<div class="gantt">
+  <div class="seg" style="flex:3"><span class="tk">0</span>P2</div>
+  <div class="seg" style="flex:5">P4</div>
+  <div class="seg" style="flex:4">P1</div>
+  <div class="seg" style="flex:1">P3<span class="tke">13</span></div>
+</div>
+<div class="small" style="margin:-8pt 0 8pt;">Boundaries: P2 0&rarr;3, P4 3&rarr;8, P1 8&rarr;12, P3 12&rarr;13.</div>
+<div class="formula">WT: P2=0, P4=3, P1=8, P3=12 &rarr; Average WT = 23/4 = <b>5.75</b></div>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — Starvation &amp; Aging</div>
+Priority scheduling can <b>starve</b> low-priority processes forever if high-priority ones keep
+arriving. The standard cure is <b>aging</b>: gradually raise the priority of a process the longer it
+waits, so every process eventually becomes high-priority enough to run. (Legend: when MIT's IBM 7094
+was shut down in 1973, a low-priority job submitted in 1967 was found still waiting.)</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-7">Round Robin (RR)</h2>
+<p><b>Intuition.</b> FCFS with a stopwatch. Each process gets a fixed <b>time quantum</b> (time slice);
+if it doesn't finish, it's preempted and sent to the back of the ready queue. Designed for
+<em>fairness</em> and good <em>response time</em> — the heart of interactive time-sharing.</p>
+
+<p><b>Worked example</b> (quantum q=2, all AT=0): P1 BT=5, P2 BT=4, P3 BT=2, P4 BT=1.</p>
+<div class="gantt">
+  <div class="seg" style="flex:2"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:2">P2</div>
+  <div class="seg" style="flex:2">P3</div>
+  <div class="seg" style="flex:1">P4</div>
+  <div class="seg" style="flex:2">P1</div>
+  <div class="seg" style="flex:2">P2</div>
+  <div class="seg" style="flex:1">P1<span class="tke">12</span></div>
+</div>
+<div class="small" style="margin:-8pt 0 8pt;">Boundaries: P1 0&rarr;2, P2 2&rarr;4, P3 4&rarr;6, P4 6&rarr;7, P1 7&rarr;9, P2 9&rarr;11, P1 11&rarr;12.</div>
+
+<table class="avoid">
+<thead><tr><th>Process</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th><th class="c">RT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">5</td><td class="c">12</td><td class="c">12</td><td class="c">7</td><td class="c">0</td></tr>
+<tr><td>P2</td><td class="c">4</td><td class="c">11</td><td class="c">11</td><td class="c">7</td><td class="c">2</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">6</td><td class="c">6</td><td class="c">4</td><td class="c">4</td></tr>
+<tr><td>P4</td><td class="c">1</td><td class="c">7</td><td class="c">7</td><td class="c">6</td><td class="c">6</td></tr>
+</tbody>
+</table>
+<div class="formula">Average WT = 24/4 = <b>6.0</b> &emsp; Average TAT = 36/4 = <b>9.0</b> &emsp; Average RT = 12/4 = <b>3.0</b></div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip — choosing the quantum</div>
+The time quantum is a knob. <b>Too large</b> &rarr; RR degenerates into FCFS (each job finishes in one
+slice), hurting response time. <b>Too small</b> &rarr; excessive context-switch overhead eats the CPU.
+Rule of thumb: the quantum should be large enough that ~80% of CPU bursts finish within it, typically
+10–100&nbsp;ms. RR optimizes <em>response time</em> and fairness, not average waiting time.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-8">Multilevel Queue (MLQ)</h2>
+<p>Real systems have different <em>classes</em> of process (interactive, batch, system). MLQ splits
+the ready queue into several separate queues, each with its own scheduling algorithm, and processes
+are permanently assigned to one queue by type.</p>
+<figure class="diagram">
+<div class="asciiart">   highest priority
+   ┌──────────────────────────────┐
+   │ System processes    (RR)      │  ← served first
+   ├──────────────────────────────┤
+   │ Interactive         (RR)      │
+   ├──────────────────────────────┤
+   │ Batch / background  (FCFS)    │  ← served only when
+   └──────────────────────────────┘     higher queues empty
+   lowest priority</div>
+<figcaption>Multilevel queue: fixed classes, each with its own policy; higher queues preferred.</figcaption>
+</figure>
+<p><b>&minus;</b> Rigid — a process is stuck in its queue, and low queues can starve. That rigidity
+motivates the next algorithm.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-9">Multilevel Feedback Queue (MLFQ)</h2>
+<p>The most sophisticated classic scheduler, and the closest to what real OSes use. Like MLQ, but
+processes can <b>move between queues</b> based on observed behavior:</p>
+<ul class="tight">
+<li>New processes enter the top (highest-priority, short-quantum) queue.</li>
+<li>A process that uses its whole quantum (CPU-bound) is <b>demoted</b> to a lower, longer-quantum queue.</li>
+<li>A process that yields early for I/O (interactive) stays high or is <b>promoted</b>.</li>
+<li>Periodic <b>aging</b> boosts long-waiting processes to prevent starvation.</li>
+</ul>
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+MLFQ <em>learns</em> each process's nature without being told its burst time: interactive jobs (short
+bursts) naturally float to the top for great responsiveness, while CPU hogs sink to the bottom where
+they run efficiently in long slices. It approximates SJF's benefits without needing to know burst
+times in advance. This is why it's the design basis for Windows, macOS, and older Linux schedulers.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s4-10">Comparison &amp; How to Choose</h2>
+<table class="avoid">
+<thead><tr><th>Algorithm</th><th class="c">Preempt?</th><th>Optimizes</th><th>Starvation</th><th>Key weakness</th></tr></thead>
+<tbody>
+<tr><td>FCFS</td><td class="c">No</td><td>Simplicity</td><td class="c">No</td><td>Convoy effect</td></tr>
+<tr><td>SJF</td><td class="c">No</td><td>Avg waiting time</td><td class="c">Yes</td><td>Needs burst times</td></tr>
+<tr><td>SRTF</td><td class="c">Yes</td><td>Avg waiting time (best)</td><td class="c">Yes</td><td>Overhead + estimates</td></tr>
+<tr><td>Priority</td><td class="c">Either</td><td>Importance</td><td class="c">Yes</td><td>Starvation (use aging)</td></tr>
+<tr><td>Round Robin</td><td class="c">Yes</td><td>Response time, fairness</td><td class="c">No</td><td>Quantum tuning</td></tr>
+<tr><td>MLFQ</td><td class="c">Yes</td><td>Balanced, adaptive</td><td class="c">No (aging)</td><td>Complex to tune</td></tr>
+</tbody>
+</table>
+<p><b>Real-world:</b> Linux's modern <b>CFS</b> (Completely Fair Scheduler) doesn't use fixed slices at
+all — it tracks each task's "virtual runtime" and always runs the one that has had the least CPU,
+approximating perfect fairness. The classic algorithms above remain the vocabulary for reasoning about
+and interviewing on scheduling.</p>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part IV</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Write the formulas for turnaround, waiting, and response time.</li>
+      <li>What is the convoy effect and which algorithm suffers from it?</li>
+      <li>Why is SJF optimal for average waiting time, and why can't we use it directly?</li>
+      <li>Explain starvation and how aging fixes it.</li>
+      <li>How does MLFQ approximate SJF without knowing burst times?</li>
+    </ol>
+    <h4>Application (solve fully — Gantt + table)</h4>
+    <ol class="tight" start="6">
+      <li>P1(AT0,BT4), P2(AT1,BT3), P3(AT2,BT1), P4(AT3,BT2): compute average WT and TAT under
+      <b>FCFS</b>, then under <b>SRTF</b>. Which is better?</li>
+      <li>Same four processes under <b>Round Robin, q=2</b>: give the Gantt chart and average response time.</li>
+      <li>Show that increasing RR's quantum toward infinity turns it into FCFS.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Which scheduler would you pick for a real-time system vs. a batch server vs. a desktop, and why?"</li>
+      <li>"Design a scheduler that gives interactive apps good response time and batch jobs good throughput." (Hint: MLFQ.)</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Build a Gantt chart and compute WT/TAT for any algorithm &middot; convoy effect &middot; the
+    quantum trade-off in RR &middot; why MLFQ adapts to process behavior.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On Linux, run <code>nice -n 19 yes &gt; /dev/null &amp;</code> and <code>nice -n -5 yes &gt; /dev/null &amp;</code>
+    (the second may need <code>sudo</code>), then watch them in <code>top</code>. Observe how the
+    scheduler splits CPU by priority. Kill them with <code>kill %1 %2</code>. You've just driven the
+    scheduler by hand (more in Part XIV).</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> given any process table you can produce the
+    correct Gantt chart and average waiting/turnaround/response times for FCFS, SJF, SRTF, Priority,
+    and Round Robin — and explain which metric each algorithm optimizes.</p>
+  </div>
+</div>

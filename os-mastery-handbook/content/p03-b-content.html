@@ -1,0 +1,289 @@
+<!-- ===================== PART III CONTENT ===================== -->
+<h1 class="chapter" id="ch3" data-run="Threads &amp; Concurrency"><span class="chnum">Part III</span>Threads &amp; Concurrency</h1>
+
+<p class="lead">If a process is a running program with its own memory, a thread is a single flow of
+execution <em>within</em> that memory. Threads let one program keep a UI responsive while it
+downloads a file, or serve thousands of users at once — but because they share memory, they force us
+to confront concurrency head-on.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-1">What Is a Thread?</h2>
+<p><b>What is it?</b> A <span class="term">thread</span> (short for "thread of execution") is the
+smallest unit the CPU schedules — a single sequential flow of instructions with its own program
+counter, registers, and stack, running inside a process and sharing that process's memory and
+resources with its sibling threads.</p>
+
+<p><b>Simple intuition.</b> A process is a <em>kitchen</em>; a thread is a <em>cook</em>. One cook
+(single-threaded) does everything in sequence. Add more cooks (threads) in the same kitchen and they
+work simultaneously, sharing the same ingredients, counters, and fridge (memory). They get more done
+— but if two cooks grab the same knife at once, you have a problem (a race condition).</p>
+
+<p><b>Why do we need it?</b> Before threads, doing two things at once meant two <em>processes</em>,
+which are expensive to create and cannot easily share data. Threads are lightweight and share memory
+by default, so a single program can naturally overlap work — compute while waiting on I/O, or spread
+computation across CPU cores.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-2">Process vs Thread — What's Shared, What's Private</h2>
+
+<p>This is <em>the</em> most-asked threading question. The answer hinges on one picture: threads of a
+process share almost everything, but each keeps its own execution state.</p>
+
+<figure class="diagram">
+<div class="asciiart">   ┌──────────────── PROCESS (one address space) ─────────────────┐
+   │  SHARED by all threads:                                       │
+   │    ┌──────┐ ┌──────┐ ┌──────┐ ┌───────────────┐              │
+   │    │ TEXT │ │ DATA │ │ HEAP │ │ open files,    │             │
+   │    │ code │ │ glob │ │ malloc│ │ signals, PID   │            │
+   │    └──────┘ └──────┘ └──────┘ └───────────────┘              │
+   │                                                              │
+   │   Thread 1          Thread 2          Thread 3               │
+   │  ┌─────────┐       ┌─────────┐       ┌─────────┐   PRIVATE   │
+   │  │ stack   │       │ stack   │       │ stack   │   to each   │
+   │  │ regs+PC │       │ regs+PC │       │ regs+PC │   thread    │
+   │  └─────────┘       └─────────┘       └─────────┘             │
+   └──────────────────────────────────────────────────────────────┘</div>
+<figcaption>Threads share the process's code, globals, heap, and OS resources; each has its own stack,
+registers, and program counter.</figcaption>
+</figure>
+
+<table class="avoid">
+<thead><tr><th style="width:50%">SHARED across threads of a process</th><th style="width:50%">PRIVATE to each thread</th></tr></thead>
+<tbody>
+<tr><td>Code (text segment)</td><td>Stack (local variables, call frames)</td></tr>
+<tr><td>Global &amp; static data</td><td>CPU registers</td></tr>
+<tr><td>Heap (<code>malloc</code>'d memory)</td><td>Program counter (PC)</td></tr>
+<tr><td>Open file descriptors, sockets</td><td>Thread ID (TID)</td></tr>
+<tr><td>Process ID, signal handlers, working dir</td><td>Errno, thread-local storage (TLS)</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+Threads share <b>memory</b> (so they can cooperate cheaply — no copying) but keep their own
+<b>stack + registers + PC</b> (so each can be at a different point in the code). Sharing memory is
+why threads are fast <em>and</em> why they need synchronization: two threads writing the same global
+with no lock is a data race.</div>
+
+<table class="avoid">
+<thead><tr><th style="width:22%">Aspect</th><th>Process</th><th>Thread</th></tr></thead>
+<tbody>
+<tr><td>Memory</td><td>Own private address space</td><td>Shares the process's address space</td></tr>
+<tr><td>Creation cost</td><td>Heavy (new address space, COW)</td><td>Light (just a stack + PCB-like TCB)</td></tr>
+<tr><td>Context switch</td><td>Expensive (switch page tables, flush TLB)</td><td>Cheaper (same address space)</td></tr>
+<tr><td>Communication</td><td>Needs IPC (pipes, shared mem)</td><td>Shared variables (direct)</td></tr>
+<tr><td>Isolation / safety</td><td>Strong — a crash stays contained</td><td>Weak — one thread's bad write can corrupt all</td></tr>
+<tr><td>One crashes</td><td>Others unaffected</td><td>Can take down the whole process</td></tr>
+</tbody>
+</table>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"Threads have their own heap." No — the <b>heap is shared</b>. If thread A <code>malloc</code>s and
+passes the pointer to thread B, B can use it. Only the <b>stack</b> is per-thread. This is precisely
+why passing a pointer to a local (stack) variable of one thread to another thread is dangerous.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-3">Why Threads? (And When Not To)</h2>
+<ul class="tight">
+<li><b>Responsiveness</b> — one thread handles the UI while another does slow work; the app never freezes.</li>
+<li><b>Resource sharing</b> — threads share memory for free; no IPC plumbing needed.</li>
+<li><b>Economy</b> — creating and switching threads is far cheaper than processes.</li>
+<li><b>Scalability / parallelism</b> — on a multi-core CPU, threads run <em>truly simultaneously</em>,
+one per core, cutting wall-clock time.</li>
+</ul>
+<p><b>The cost:</b> shared memory means shared bugs. Race conditions, deadlocks, and hard-to-reproduce
+"Heisenbugs" are the price. And more threads is not always faster — see the tip below.</p>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Why can too many threads reduce performance?" Because (1) each thread adds context-switching and
+scheduling overhead; (2) beyond the core count, threads compete for the <em>same</em> cores, so you
+pay switching cost without gaining parallelism; (3) more threads means more lock contention (they
+serialize on shared locks) and more cache thrashing. The sweet spot for CPU-bound work is roughly
+one thread per core; for I/O-bound work you can use more, since threads spend time blocked.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-4">User-Level vs Kernel-Level Threads</h2>
+<p>Who manages the threads — a user-space library, or the kernel? This choice has real consequences.</p>
+
+<dl>
+<dt>User-level threads (ULT)</dt><dd>Managed entirely by a library in user space; the kernel sees only
+one process and knows nothing of the threads. <b>+</b> Very fast to create/switch (no system call);
+portable. <b>&minus;</b> If one thread makes a blocking system call, the <em>whole process</em> blocks
+(the kernel blocks the one process it can see); cannot use multiple cores.</dd>
+<dt>Kernel-level threads (KLT)</dt><dd>Managed by the kernel, which schedules each thread individually.
+<b>+</b> One thread blocking doesn't stop the others; real parallelism across cores. <b>&minus;</b>
+Creation and switching involve the kernel, so they're slower than ULTs.</dd>
+</dl>
+
+<p>Modern systems (Linux, Windows) use kernel-level threads — every <code>pthread</code> maps to a
+kernel-scheduled thread — because true multi-core parallelism and non-blocking behavior matter more
+than the last drop of switch speed.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-5">Multithreading Models</h2>
+<p>These describe how user threads map onto kernel threads.</p>
+
+<h3>Many-to-One</h3>
+<p>Many user threads map to a single kernel thread. Thread management is cheap and in user space, but
+one blocking call blocks everyone, and no multi-core parallelism. (Old "green threads.")</p>
+
+<h3>One-to-One</h3>
+<p>Each user thread maps to its own kernel thread. True concurrency and parallelism; a block affects
+only that thread. Cost: creating many threads creates many kernel threads. This is what <b>Linux and
+Windows use today</b>.</p>
+
+<h3>Many-to-Many</h3>
+<p>Many user threads multiplexed onto a smaller-or-equal pool of kernel threads. Combines flexibility
+(create as many user threads as you like) with parallelism (multiple kernel threads). Complex to
+implement; used by some runtimes (e.g. Go's goroutine scheduler is a modern many-to-many-style design).</p>
+
+<figure class="diagram">
+<div class="asciiart">  MANY-TO-ONE          ONE-TO-ONE            MANY-TO-MANY
+  U U U U              U   U   U            U U U U U
+   \|/ /               │   │   │             \ \|/ /
+    K                  K   K   K              K   K
+  (1 kernel          (1 kernel each)       (fewer kernel
+   thread)                                  threads, pooled)
+  block = all         block = just one      flexible + parallel</div>
+<figcaption>U = user thread, K = kernel thread. The mapping decides blocking behavior and parallelism.</figcaption>
+</figure>
+
+<p><b>Thread Control Block (TCB).</b> Just as a process has a PCB, each thread has a lighter
+<span class="term">TCB</span> holding its thread ID, register set, program counter, stack pointer, and
+scheduling state. Threads of one process share the PCB's memory and resource fields but each have
+their own TCB.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-6">Concurrency vs Parallelism</h2>
+<p>These two words are used interchangeably in casual speech and must be distinguished precisely in an
+interview.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Concurrency</b> = <em>dealing with</em> many things at once (structure): tasks are in progress over
+overlapping time periods, possibly interleaved on one core. <b>Parallelism</b> = <em>doing</em> many
+things at the exact same instant (execution): tasks literally run simultaneously on multiple cores.
+Concurrency is about <em>how you structure</em> work; parallelism is about <em>how it executes</em>.
+You can have concurrency on a single core (via interleaving); you need multiple cores for parallelism.</div>
+
+<figure class="diagram">
+<div class="asciiart">  CONCURRENCY (1 core, interleaved)     PARALLELISM (2 cores, simultaneous)
+  Core: A B A B A B A B  (time →)       Core1: A A A A A A
+        one core switches                Core2: B B B B B B
+        between A and B                   both run at the same instant</div>
+<figcaption>Concurrency interleaves; parallelism overlaps in real time. Parallel work is concurrent, but concurrent work need not be parallel.</figcaption>
+</figure>
+
+<p><b>Analogy.</b> A single barista taking one order while steaming milk for another, alternating
+between them, is <em>concurrent</em>. Two baristas each making a full drink at the same time is
+<em>parallel</em>.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-7">Multi-Core Systems</h2>
+<p>A modern CPU packs several <b>cores</b>, each a full processing unit able to run a thread
+independently. The OS scheduler spreads runnable threads across cores, achieving real parallelism.
+Some cores support <b>simultaneous multithreading</b> (Intel's Hyper-Threading), presenting two
+<em>logical</em> CPUs per physical core to better utilize execution units. To software, each logical
+CPU is just another place to run a thread — which is why one-to-one threading maps so naturally onto
+modern hardware.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-8">Race Conditions and Critical Sections</h2>
+<p>The moment two threads share mutable data, correctness is at risk. This section introduces the
+problem; Part V solves it in full.</p>
+
+<p><b>Race condition.</b> A <span class="term">race condition</span> occurs when the outcome of a
+program depends on the <em>timing</em> or interleaving of threads accessing shared data — and at
+least one is writing. The result is nondeterministic: it might work a thousand times and corrupt data
+on the thousand-and-first.</p>
+
+<pre class="long"><span class="ttl">The classic race: two threads incrementing a shared counter</span><span class="cm">// counter++ is NOT atomic. The CPU actually does three steps:</span>
+<span class="cm">//   1) read  counter  into a register</span>
+<span class="cm">//   2) add   1</span>
+<span class="cm">//   3) write register back to counter</span>
+
+<span class="cm">// If two threads interleave those steps on counter = 5:</span>
+<span class="cm">//   T1 reads 5 ─┐                     T2 reads 5 ─┐</span>
+<span class="cm">//   T1 adds → 6 │                     T2 adds → 6 │</span>
+<span class="cm">//   T1 writes 6 ┘                     T2 writes 6 ┘</span>
+<span class="cm">// Two increments happened, but counter is 6, not 7. One update was LOST.</span></pre>
+
+<p><b>Critical section.</b> A <span class="term">critical section</span> is a piece of code that
+accesses shared data and must <em>not</em> be executed by more than one thread at a time. The fix for
+a race is to enforce <b>mutual exclusion</b> over the critical section — only one thread inside at
+once — using a lock, mutex, or semaphore (Part V).</p>
+
+<figure class="diagram">
+<div class="asciiart">   Thread wants shared data:
+   ┌────────────┐   acquire lock   ┌──────────────────┐  release lock  ┌───────────┐
+   │ entry      │ ───────────────▶ │ CRITICAL SECTION │ ─────────────▶ │ exit /    │
+   │ section    │  (wait if busy)  │ touch shared data │   (let others │ remainder │
+   └────────────┘                  │ — one thread only │    in)        └───────────┘
+                                    └──────────────────┘</div>
+<figcaption>Guarding a critical section with a lock: enter one at a time, do the shared work, then release.</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s3-9">Thread Safety</h2>
+<p>Code is <span class="term">thread-safe</span> if it behaves correctly when called from multiple
+threads at once, regardless of interleaving. You achieve it by (a) avoiding shared mutable state
+(use locals/immutable data), (b) protecting shared state with locks, or (c) using atomic operations.
+A function that keeps hidden shared state (like the classic <code>strtok</code>) is <em>not</em>
+thread-safe; reentrant variants (<code>strtok_r</code>) are provided precisely for threaded use.</p>
+
+<pre class="long"><span class="ttl">A minimal POSIX threads (pthreads) program</span><span class="kw">#include</span> &lt;pthread.h&gt;
+<span class="kw">#include</span> &lt;stdio.h&gt;
+
+<span class="kw">void</span> *worker(<span class="kw">void</span> *arg) {
+    <span class="kw">long</span> id = (<span class="kw">long</span>)arg;
+    printf(<span class="st">"thread %ld running\n"</span>, id);
+    <span class="kw">return</span> NULL;
+}
+
+<span class="kw">int</span> main(<span class="kw">void</span>) {
+    pthread_t t[4];
+    <span class="kw">for</span> (<span class="kw">long</span> i = 0; i &lt; 4; i++)
+        pthread_create(&amp;t[i], NULL, worker, (<span class="kw">void</span> *)i);  <span class="cm">// spawn</span>
+    <span class="kw">for</span> (<span class="kw">int</span> i = 0; i &lt; 4; i++)
+        pthread_join(t[i], NULL);                        <span class="cm">// wait for each</span>
+    <span class="kw">return</span> 0;                 <span class="cm">// compile with: gcc prog.c -lpthread</span>
+}</pre>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part III</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>List exactly what threads of a process share and what each keeps private.</li>
+      <li>Give the precise difference between concurrency and parallelism, with an example of concurrency without parallelism.</li>
+      <li>Contrast user-level and kernel-level threads, especially blocking behavior.</li>
+      <li>Describe the three multithreading models and which one Linux uses.</li>
+      <li>Define a race condition and a critical section.</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>Two threads each run <code>counter++</code> 1,000,000 times on a shared <code>counter</code>
+      starting at 0, with no lock. What is the range of possible final values, and why?</li>
+      <li>You move a CPU-bound program from 4 threads to 40 threads on a 4-core machine and it gets
+      <em>slower</em>. Explain.</li>
+      <li>Why can passing a pointer to a thread's local variable to another thread cause corruption?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"When would you choose multiple processes over multiple threads?"</li>
+      <li>"Is a single-core machine capable of concurrency? Of parallelism? Explain."</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The shared-vs-private thread memory picture &middot; concurrency vs parallelism &middot; why
+    <code>counter++</code> races &middot; one-to-one vs many-to-one threading.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Write a pthreads program where N threads each increment a shared global counter one million times
+    with no lock. Print the final value. Run it several times — watch it come out <em>different and
+    wrong</em>. Keep this program; in Part V you will fix it with a mutex and see it print the correct
+    value every time.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can draw the thread memory model,
+    explain why shared mutable state races, and predict when adding threads helps versus hurts.</p>
+  </div>
+</div>
