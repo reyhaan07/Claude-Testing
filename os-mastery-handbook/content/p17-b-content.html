@@ -1,0 +1,231 @@
+<!-- ===================== PART XVII CONTENT ===================== -->
+<h1 class="chapter" id="ch17" data-run="Practical Projects"><span class="chnum">Part XVII</span>Practical Projects</h1>
+
+<p class="lead">Do these in order. Each assumes the last, and each turns a chapter you <em>read</em> into
+a program you <em>wrote</em>. Write them in C on Linux (or WSL/macOS) to feel the real system calls.
+Keep every project — later ones build on earlier code, and together they make a portfolio that proves
+you understand operating systems.</p>
+
+<h2 class="s" id="s17-1">Beginner <span class="badge beg">LEVEL 1</span></h2>
+
+<div class="proj">
+<h3><span class="pn">01</span> Process Creation Demo</h3>
+<dl>
+<dt>Objective</dt><dd>Create a child process and print both PIDs, proving parent/child identity.</dd>
+<dt>Concepts</dt><dd>Processes, PIDs, <code>fork()</code>'s double return (Part II).</dd>
+<dt>Plan</dt><dd>Call <code>fork()</code>; branch on the return value; print <code>getpid()</code>/<code>getppid()</code> in each.</dd>
+<dt>Milestones</dt><dd>(1) fork compiles &amp; runs; (2) both branches print; (3) explain the output order's nondeterminism.</dd>
+<dt>Expected</dt><dd>Two lines, one from parent (child's PID) and one from child (0-return path).</dd>
+<dt>Extensions</dt><dd>Fork N children in a loop; build a small process tree and print it.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">02</span> fork / wait Demonstration</h3>
+<dl>
+<dt>Objective</dt><dd>Have the parent wait for the child and read its exit status.</dd>
+<dt>Concepts</dt><dd>Termination, reaping, exit status, synchronization via <code>wait</code> (Part II).</dd>
+<dt>Plan</dt><dd>Child does work and <code>exit(k)</code>; parent <code>waitpid()</code>s and prints <code>WEXITSTATUS</code>.</dd>
+<dt>Milestones</dt><dd>(1) parent blocks until child ends; (2) status decoded; (3) time the child to confirm the wait.</dd>
+<dt>Expected</dt><dd>Parent prints the child's exit code <em>after</em> the child finishes.</dd>
+<dt>Extensions</dt><dd>Wait for multiple children; detect a child killed by a signal (<code>WIFSIGNALED</code>).</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">03</span> Zombie Process Demonstration</h3>
+<dl>
+<dt>Objective</dt><dd>Deliberately create a zombie and observe it, then eliminate it.</dd>
+<dt>Concepts</dt><dd>Zombie processes, the process table, reaping (Part II).</dd>
+<dt>Plan</dt><dd>Child <code>_exit()</code>s immediately; parent <code>sleep(30)</code> <em>without</em> <code>wait</code>.</dd>
+<dt>Milestones</dt><dd>(1) run <code>ps -el | grep defunct</code> and find the <code>&lt;defunct&gt;</code> entry; (2) add <code>wait()</code>; (3) confirm the zombie is gone.</dd>
+<dt>Expected</dt><dd>A visible zombie while the parent naps; none once reaped.</dd>
+<dt>Extensions</dt><dd>Reap asynchronously with a <code>SIGCHLD</code> handler instead of a blocking wait.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">04</span> Orphan Process Demonstration</h3>
+<dl>
+<dt>Objective</dt><dd>Create an orphan and watch it get re-parented to PID 1.</dd>
+<dt>Concepts</dt><dd>Orphans, re-parenting, PID 1 (Parts II, XV).</dd>
+<dt>Plan</dt><dd>Parent exits first; child <code>sleep</code>s, then prints <code>getppid()</code> — now 1.</dd>
+<dt>Milestones</dt><dd>(1) parent exits before child; (2) child's parent PID becomes 1; (3) explain who reaps it.</dd>
+<dt>Expected</dt><dd>The child reports parent PID 1 (systemd) after the original parent dies.</dd>
+<dt>Extensions</dt><dd>Turn the child into a proper daemon with <code>setsid()</code>.</dd>
+</dl>
+</div>
+
+<h2 class="s" id="s17-2">Intermediate <span class="badge int">LEVEL 2</span></h2>
+
+<div class="proj">
+<h3><span class="pn">05</span> Mini Shell</h3>
+<dl>
+<dt>Objective</dt><dd>A REPL that runs commands: read a line, run the program, wait, repeat.</dd>
+<dt>Concepts</dt><dd>The fork/exec/wait pattern, the shell loop (Part II).</dd>
+<dt>Plan</dt><dd>Loop: print prompt &rarr; read line &rarr; tokenize &rarr; <code>fork</code> &rarr; child <code>execvp</code> &rarr; parent <code>wait</code>.</dd>
+<dt>Milestones</dt><dd>(1) run <code>ls</code>; (2) handle arguments; (3) built-ins <code>cd</code> and <code>exit</code>.</dd>
+<dt>Expected</dt><dd>A working prompt that runs external commands with arguments.</dd>
+<dt>Extensions</dt><dd>Command history; background <code>&amp;</code>; grow this into Project 16.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">06</span> Producer&ndash;Consumer</h3>
+<dl>
+<dt>Objective</dt><dd>Threads producing and consuming through a bounded buffer, correctly.</dd>
+<dt>Concepts</dt><dd>Semaphores, mutex, bounded buffer (Part V).</dd>
+<dt>Plan</dt><dd>Two counting semaphores (<code>empty</code>, <code>full</code>) + a mutex; producer/consumer threads.</dd>
+<dt>Milestones</dt><dd>(1) single producer/consumer; (2) multiple of each; (3) verify no item lost/duplicated.</dd>
+<dt>Expected</dt><dd>Every produced item consumed exactly once, no corruption, no deadlock.</dd>
+<dt>Extensions</dt><dd>Swap semaphores for condition variables; benchmark throughput vs buffer size.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">07</span> Thread-Safe Queue</h3>
+<dl>
+<dt>Objective</dt><dd>A generic concurrent queue safe for many producers/consumers.</dd>
+<dt>Concepts</dt><dd>Mutexes, condition variables, blocking semantics (Part V).</dd>
+<dt>Plan</dt><dd><code>enqueue</code>/<code>dequeue</code> guarded by a mutex; <code>dequeue</code> waits on a condvar when empty.</dd>
+<dt>Milestones</dt><dd>(1) correct under 1+1 threads; (2) stress with 8+8; (3) clean shutdown signal.</dd>
+<dt>Expected</dt><dd>No races or lost wakeups under heavy concurrent load.</dd>
+<dt>Extensions</dt><dd>Bounded variant (block on full); lock-free version with CAS (Part V).</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">08</span> Readers&ndash;Writers</h3>
+<dl>
+<dt>Objective</dt><dd>Allow concurrent readers but exclusive writers on a shared resource.</dd>
+<dt>Concepts</dt><dd>Reader/writer coordination, starvation trade-offs (Part V).</dd>
+<dt>Plan</dt><dd>Reader counter + counter mutex + resource semaphore; first-in/last-out reader logic.</dd>
+<dt>Milestones</dt><dd>(1) many readers overlap; (2) a writer excludes all; (3) demonstrate writer starvation, then fix it.</dd>
+<dt>Expected</dt><dd>Readers run in parallel; writers get exclusive access; data stays consistent.</dd>
+<dt>Extensions</dt><dd>Implement writer-preference; compare fairness.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">09</span> IPC Using Pipes</h3>
+<dl>
+<dt>Objective</dt><dd>Two processes exchanging data through a pipe.</dd>
+<dt>Concepts</dt><dd>Pipes, fds, closing unused ends, EOF (Part XI).</dd>
+<dt>Plan</dt><dd><code>pipe()</code> then <code>fork()</code>; parent writes, child reads and processes.</dd>
+<dt>Milestones</dt><dd>(1) send one message; (2) stream many; (3) implement <code>cmd1 | cmd2</code> with <code>dup2</code>.</dd>
+<dt>Expected</dt><dd>Child receives exactly what the parent sent; clean EOF on writer close.</dd>
+<dt>Extensions</dt><dd>Named pipe (FIFO) between two <em>unrelated</em> programs.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">10</span> Shared-Memory Program</h3>
+<dl>
+<dt>Objective</dt><dd>Two processes communicating via a shared memory segment, synchronized.</dd>
+<dt>Concepts</dt><dd>Shared memory, <code>mmap</code>, semaphores for sync (Parts VIII, XI).</dd>
+<dt>Plan</dt><dd><code>shm_open</code>+<code>mmap</code> a region; a named semaphore orders writer&rarr;reader.</dd>
+<dt>Milestones</dt><dd>(1) both map the same region; (2) writer's data visible to reader; (3) add the semaphore to fix races.</dd>
+<dt>Expected</dt><dd>Reader sees exactly what the writer wrote, in order, no tearing.</dd>
+<dt>Extensions</dt><dd>A ring buffer in shared memory; benchmark vs the pipe version.</dd>
+</dl>
+</div>
+
+<h2 class="s" id="s17-3">Advanced <span class="badge adv">LEVEL 3</span></h2>
+
+<div class="proj">
+<h3><span class="pn">11</span> Custom Memory Allocator</h3>
+<dl>
+<dt>Objective</dt><dd>Implement your own <code>malloc</code>/<code>free</code> over a heap you request from the kernel.</dd>
+<dt>Concepts</dt><dd>Heap, <code>sbrk</code>/<code>mmap</code>, free lists, fragmentation (Parts VII, XVI).</dd>
+<dt>Plan</dt><dd>Grab memory with <code>sbrk</code>/<code>mmap</code>; manage blocks with headers; free-list allocation (first/best fit); coalesce on free.</dd>
+<dt>Milestones</dt><dd>(1) allocate/free fixed sizes; (2) reuse freed blocks; (3) split &amp; coalesce; (4) handle alignment.</dd>
+<dt>Expected</dt><dd>A drop-in allocator that passes a stress test of random alloc/free without leaking or corrupting.</dd>
+<dt>Extensions</dt><dd>Size classes / bins (like a real allocator); measure fragmentation.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">12</span> Mini Scheduler Simulator</h3>
+<dl>
+<dt>Objective</dt><dd>Simulate FCFS, SJF, SRTF, Priority, and Round Robin on a process table.</dd>
+<dt>Concepts</dt><dd>Scheduling algorithms, metrics (Part IV).</dd>
+<dt>Plan</dt><dd>Read (AT, BT[, priority]); simulate the clock; output Gantt order and average WT/TAT/RT.</dd>
+<dt>Milestones</dt><dd>(1) FCFS correct; (2) add preemptive SRTF &amp; RR with a quantum; (3) verify against the Part IV worked examples.</dd>
+<dt>Expected</dt><dd>Matches the hand-computed numbers from Part IV for every algorithm.</dd>
+<dt>Extensions</dt><dd>Add MLFQ; plot average waiting time vs quantum for RR.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">13</span> Page-Replacement Simulator</h3>
+<dl>
+<dt>Objective</dt><dd>Count page faults for FIFO, LRU, and Optimal on a reference string.</dd>
+<dt>Concepts</dt><dd>Demand paging, replacement, Belady's anomaly (Part VIII).</dd>
+<dt>Plan</dt><dd>Input reference string + frame count; simulate each policy; count faults.</dd>
+<dt>Milestones</dt><dd>(1) FIFO; (2) LRU &amp; Optimal; (3) reproduce Belady's anomaly with FIFO at 3 vs 4 frames.</dd>
+<dt>Expected</dt><dd>Reproduces Part VIII's numbers (7/9/10) and demonstrates Belady.</dd>
+<dt>Extensions</dt><dd>Add Clock/second-chance; sweep frame counts and plot the fault curve.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">14</span> File-System Simulator</h3>
+<dl>
+<dt>Objective</dt><dd>A tiny in-memory (or single-file) file system with inodes and a directory.</dd>
+<dt>Concepts</dt><dd>Inodes, block allocation, free-space bitmap, directories (Part IX).</dd>
+<dt>Plan</dt><dd>Model a superblock, inode table, data blocks, and a bitmap; implement <code>create</code>/<code>write</code>/<code>read</code>/<code>delete</code>/<code>ls</code>.</dd>
+<dt>Milestones</dt><dd>(1) create &amp; list files; (2) read/write via indexed blocks; (3) delete &amp; reclaim blocks; (4) persist to a file.</dd>
+<dt>Expected</dt><dd>A working mini-FS you can format, populate, unmount, and re-mount.</dd>
+<dt>Extensions</dt><dd>Add indirect blocks for large files; add a simple journal.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">15</span> Thread Pool</h3>
+<dl>
+<dt>Objective</dt><dd>A fixed set of worker threads pulling tasks from a shared queue.</dd>
+<dt>Concepts</dt><dd>Threads, thread-safe queue (Project 7), work distribution (Parts III, V).</dd>
+<dt>Plan</dt><dd>Spawn N workers that block on your thread-safe queue; a <code>submit(task)</code> enqueues work; graceful shutdown.</dd>
+<dt>Milestones</dt><dd>(1) workers run submitted tasks; (2) balanced load; (3) clean shutdown drains or cancels tasks.</dd>
+<dt>Expected</dt><dd>Tasks execute concurrently across exactly N threads with no races.</dd>
+<dt>Extensions</dt><dd>Return futures/results; dynamically size the pool by load.</dd>
+</dl>
+</div>
+
+<div class="proj">
+<h3><span class="pn">16</span> Mini Unix Shell with Pipes &amp; Redirection</h3>
+<dl>
+<dt>Objective</dt><dd>Extend Project 5 into a real shell: pipelines and I/O redirection.</dd>
+<dt>Concepts</dt><dd><code>fork</code>/<code>exec</code>, <code>pipe</code>, <code>dup2</code>, fds, job control (Parts II, IX, XI).</dd>
+<dt>Plan</dt><dd>Parse <code>a | b | c</code> and <code>&lt; in</code>/<code>&gt; out</code>; wire pipes with <code>dup2</code>; fork one child per stage.</dd>
+<dt>Milestones</dt><dd>(1) single redirection; (2) two-command pipe; (3) N-stage pipeline; (4) background jobs &amp; <code>SIGINT</code> handling.</dd>
+<dt>Expected</dt><dd><code>cat file | grep foo | sort &gt; out.txt</code> works end to end.</dd>
+<dt>Extensions</dt><dd><code>jobs</code>/<code>fg</code>/<code>bg</code>; globbing; environment variables.</dd>
+</dl>
+</div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+Projects 5/16 (a shell), 11 (an allocator), and 15 (a thread pool) are <em>gold</em> for interviews:
+they're common "implement this" prompts and instant credibility on a resume. If you build only three
+from this list, build those — and be ready to explain every system call and synchronization decision in
+them.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Milestone Checklist — Part XVII</div>
+  <div class="cp-body">
+    <h4>Progression goals</h4>
+    <ol class="tight">
+      <li><b>Level 1 done when</b> you can create, wait for, and reason about processes and can produce/eliminate a zombie and an orphan on purpose.</li>
+      <li><b>Level 2 done when</b> you have a working shell, a correct producer&ndash;consumer and readers&ndash;writers, and can move data by both pipe and shared memory.</li>
+      <li><b>Level 3 done when</b> your allocator, scheduler and page-replacement simulators match this book's worked numbers, and your shell runs real pipelines.</li>
+    </ol>
+    <div class="cp-mastered"><div class="box-title">Portfolio Bar</div>
+    A single repository containing your shell (16), allocator (11), thread pool (15), and the two
+    simulators (12, 13), each with a short README explaining the OS concepts it demonstrates, is a
+    genuinely strong systems-programming portfolio.</div>
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can start any of these from a blank file,
+    explain each system call as you type it, and debug it with <code>strace</code>/<code>gdb</code> when
+    it misbehaves.</p>
+  </div>
+</div>

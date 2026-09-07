@@ -1,0 +1,285 @@
+<!-- ===================== PART XVI CONTENT ===================== -->
+<h1 class="chapter" id="ch16" data-run="What Happens When…"><span class="chnum">Part XVI</span>What Happens When&hellip;</h1>
+
+<p class="lead">Every concept in this book was a puzzle piece. Here they assemble into complete pictures.
+Read each flow slowly and notice how many earlier parts it touches — that web of connections <em>is</em>
+mastery. These are also, almost verbatim, the "explain the whole path" questions asked in senior
+interviews.</p>
+
+<!-- ================= 1 ================= -->
+<h2 class="s" id="s16-1">&hellip;I turn on my computer?</h2>
+<ol class="tight">
+<li>Power reaches the CPU, which begins executing <b>firmware</b> (UEFI/BIOS) baked into motherboard ROM.</li>
+<li>Firmware runs <b>POST</b> (power-on self-test), initializes hardware, and locates a boot device.</li>
+<li>It loads the <b>bootloader</b> (GRUB) from disk, which loads and decompresses the <b>kernel</b> into RAM.</li>
+<li>The kernel initializes memory management, the scheduler, and drivers, then <b>mounts the root filesystem</b>.</li>
+<li>It starts <b>PID 1</b> (<code>systemd</code>), the first user process, which launches services, networking, and finally the login prompt.</li>
+</ol>
+<p class="small">Touches: firmware/boot (Part I), kernel init, filesystems (IX), init &amp; PID 1 (II, XV).</p>
+
+<!-- ================= 2 ================= -->
+<h2 class="s" id="s16-2">&hellip;I open a program (double-click / type its name)?</h2>
+<ol class="tight">
+<li>The shell/desktop calls <code>fork()</code> to create a child process (Part II).</li>
+<li>The child calls <code>execve("/path/to/app")</code>; the kernel replaces its image with the program.</li>
+<li>The kernel sets up a fresh <b>virtual address space</b>, memory-maps the executable and its shared
+libraries (demand-paged, not fully loaded — Part VIII).</li>
+<li>The dynamic linker resolves library symbols; the kernel sets the program counter to the entry point.</li>
+<li>The scheduler marks the process <b>Ready</b>; on dispatch it runs. Code and data page in <em>as
+touched</em>, via page faults.</li>
+</ol>
+
+<!-- ================= 3 ================= -->
+<h2 class="s" id="s16-3">&hellip;I execute a C program?</h2>
+<ol class="tight">
+<li><code>fork</code>+<code>exec</code> load the binary (flow 2). The kernel maps text (code), data, BSS,
+and sets up the <b>stack</b> with <code>argc</code>/<code>argv</code>/environment.</li>
+<li>The C runtime startup (<code>_start</code> &rarr; <code>__libc_start_main</code>) initializes the
+library, then calls your <code>main()</code>.</li>
+<li><code>main</code> runs, using the stack for locals and the heap for <code>malloc</code>, crossing
+into the kernel via system calls for any I/O.</li>
+<li><code>main</code> returns a status; the runtime calls <code>exit()</code>, which flushes buffers and
+invokes the <code>exit_group</code> syscall; the kernel reclaims resources and leaves an exit status for
+the parent to <code>wait()</code> on.</li>
+</ol>
+
+<!-- ================= 4 ================= -->
+<h2 class="s" id="s16-4">&hellip;I call printf("hello")?</h2>
+<figure class="diagram"><div class="flow">
+  <div class="node u">printf</div><div class="arr">&rarr;</div>
+  <div class="node u">format into libc buffer</div><div class="arr">&rarr;</div>
+  <div class="node k">write() syscall<span class="sub">when buffer flushes</span></div><div class="arr">&rarr;</div>
+  <div class="node k">kernel &rarr; terminal</div>
+</div></figure>
+<ol class="tight">
+<li><code>printf</code> is a <em>library</em> function: it formats the string ("%d" &rarr; digits) into a
+user-space <b>buffer</b>. No kernel involvement yet.</li>
+<li>The buffer is flushed to <b>stdout</b> when it fills, on a newline (if line-buffered to a terminal),
+or at exit. Flushing calls the <code>write(1, ...)</code> <b>system call</b> (Part I).</li>
+<li>The kernel copies the bytes to the terminal device (or file, if redirected) via its driver.</li>
+</ol>
+<p class="small">This is why buffering matters: a thousand <code>printf</code>s may cause far fewer
+<code>write</code> syscalls (Part I). If output is redirected to a file, it's fully buffered — you may
+see nothing until <code>fflush</code> or exit.</p>
+
+<!-- ================= 5 ================= -->
+<h2 class="s" id="s16-5">&hellip;I call malloc(size)?</h2>
+<ol class="tight">
+<li><code>malloc</code> is a <em>library</em> allocator, not a syscall. It first tries to satisfy the
+request from memory it already owns (its <b>free list</b> on the heap).</li>
+<li>If it needs more, it asks the kernel to grow the heap via <code>brk</code>/<code>sbrk</code>, or maps
+a fresh region with <code>mmap</code> (for large requests).</li>
+<li>The kernel extends the process's virtual address space but typically <b>doesn't allocate physical
+RAM yet</b> — pages are backed lazily on first access via page faults (flow 14), often via a shared
+zero page (copy-on-write).</li>
+<li><code>malloc</code> returns a pointer into that space; the first write to each page triggers the
+actual physical allocation.</li>
+</ol>
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"<code>malloc</code> is a system call." It isn't — it's a user-space library routine that <em>sometimes</em>
+makes syscalls (<code>brk</code>/<code>mmap</code>) to get more heap. Most <code>malloc</code>s make no
+syscall at all, reusing already-mapped memory. That's why <code>malloc</code> is fast.</div>
+
+<!-- ================= 6 ================= -->
+<h2 class="s" id="s16-6">&hellip;I call fork()?</h2>
+<ol class="tight">
+<li>The kernel allocates a new <b>PCB</b> (<code>task_struct</code>) and a new PID for the child.</li>
+<li>It copies the parent's context — open files, registers, and the address space <b>logically</b>, but
+via <b>copy-on-write</b>: parent and child share physical pages marked read-only (Part VIII).</li>
+<li>The child is placed on the ready queue. <code>fork</code> <b>returns twice</b>: child's PID to the
+parent, 0 to the child (Part II).</li>
+<li>The first time either process <em>writes</em> a shared page, the MMU faults and the kernel copies
+just that page — so the "copy" cost is paid lazily, only for modified pages.</li>
+</ol>
+
+<!-- ================= 7 ================= -->
+<h2 class="s" id="s16-7">&hellip;I call exec()?</h2>
+<ol class="tight">
+<li>The kernel <b>discards</b> the current process's address space (text, data, heap, stack all gone) —
+but keeps the same PID and open file descriptors (unless marked close-on-exec).</li>
+<li>It memory-maps the new program's segments and its shared libraries (demand-paged).</li>
+<li>It resets the stack, sets registers, and points the program counter at the new program's entry.</li>
+<li><code>exec</code> <b>does not return</b> on success — there's no old code to return to. Execution
+begins in the new program.</li>
+</ol>
+
+<!-- ================= 8 ================= -->
+<h2 class="s" id="s16-8">&hellip;I call read(fd, buf, n)?</h2>
+<ol class="tight">
+<li><code>read</code> traps into the kernel (Part I). The kernel uses <code>fd</code> to find the
+open-file entry (and its offset) and the inode (Part IX).</li>
+<li>If the requested blocks are in the <b>page cache</b>, data is copied to <code>buf</code> immediately.</li>
+<li>If not, the kernel issues a disk request, and the process <b>blocks</b> (state Waiting) while the
+disk works via DMA (Part X). The scheduler runs someone else.</li>
+<li>When the disk completes, it <b>interrupts</b>; the kernel copies the data into the cache and
+<code>buf</code>, marks the process Ready, and <code>read</code> returns the byte count, advancing the
+offset.</li>
+</ol>
+
+<!-- ================= 9 ================= -->
+<h2 class="s" id="s16-9">&hellip;I write to a file?</h2>
+<ol class="tight">
+<li><code>write</code> traps into the kernel, which locates the file via <code>fd</code> &rarr; inode.</li>
+<li>The data is copied into the <b>page cache</b> and the page marked <b>dirty</b>. <code>write</code>
+usually returns <em>immediately</em> — before the data is on disk.</li>
+<li>The kernel flushes dirty pages to disk <b>later</b> (background writeback), or on <code>fsync</code>,
+via the driver and DMA.</li>
+<li>Metadata changes (size, timestamps) are recorded; on a journaling FS they go through the journal
+first for crash safety (Part IX).</li>
+</ol>
+<p class="small">This "write returns before it hits disk" is why <code>fsync</code> exists and why a
+sudden power loss can lose recent writes still sitting in the cache.</p>
+
+<!-- ================= 10 ================= -->
+<h2 class="s" id="s16-10">&hellip;I press a keyboard key?</h2>
+<ol class="tight">
+<li>The keyboard controller detects the keypress and raises a hardware <b>interrupt</b> (Part I/X).</li>
+<li>The CPU stops, switches to kernel mode, and runs the keyboard <b>interrupt handler</b> in the driver.</li>
+<li>The driver reads the scancode from the controller, translates it, and places the character in a
+<b>buffer</b> for the terminal/input subsystem.</li>
+<li>The kernel wakes any process <b>blocked</b> on input for that terminal (e.g. your shell in
+<code>read</code>); it becomes Ready and, when scheduled, receives the character.</li>
+</ol>
+
+<!-- ================= 11 ================= -->
+<h2 class="s" id="s16-11">&hellip;I move the mouse?</h2>
+<ol class="tight">
+<li>The mouse sends movement deltas; the controller raises an <b>interrupt</b> for each batch.</li>
+<li>The driver's handler reads the deltas and posts input events to the kernel's input layer.</li>
+<li>The windowing system (a user-space process) reads those events, updates the cursor position, and
+determines which window is under the pointer.</li>
+<li>It delivers the event to the relevant application, which may redraw — the same interrupt-driven I/O
+pattern as the keyboard, just higher-frequency.</li>
+</ol>
+
+<!-- ================= 12 ================= -->
+<h2 class="s" id="s16-12">&hellip;a network packet arrives?</h2>
+<ol class="tight">
+<li>The <b>NIC</b> receives the frame and <b>DMA</b>s it straight into a kernel receive buffer (Part XIII).</li>
+<li>The NIC raises an <b>interrupt</b>; the driver's handler does minimal work and schedules deferred
+processing (softirq/NAPI).</li>
+<li>The kernel network stack processes the packet up through IP and TCP (checksums, ordering,
+reassembly) and puts the payload in the destination socket's receive buffer.</li>
+<li>Any process blocked in <code>recv()</code>/<code>epoll</code> on that socket is marked Ready and gets
+the data when scheduled.</li>
+</ol>
+
+<!-- ================= 13 ================= -->
+<h2 class="s" id="s16-13">&hellip;RAM is full?</h2>
+<ol class="tight">
+<li>On the next allocation/page fault needing a frame, the kernel finds <b>no free frame</b>.</li>
+<li>It reclaims memory: drop clean page-cache pages (cheap), and <b>page out</b> (swap) chosen pages to
+disk using a replacement policy (Part VIII).</li>
+<li>If reclaim keeps up, execution continues (slower). If working sets exceed RAM, the system
+<b>thrashes</b> — constant paging, collapsing throughput (Part VIII).</li>
+<li>If memory truly runs out (swap full too), the kernel invokes the <b>OOM killer</b>, which terminates
+a chosen memory-hungry process to survive.</li>
+</ol>
+
+<!-- ================= 14 ================= -->
+<h2 class="s" id="s16-14">&hellip;a page fault occurs?</h2>
+<figure class="diagram"><div class="flow">
+  <div class="node">access page, present bit = 0</div><div class="arr">&rarr;</div>
+  <div class="node k">trap: page fault</div><div class="arr">&rarr;</div>
+  <div class="node hw">load page from disk</div><div class="arr">&rarr;</div>
+  <div class="node u">update table, restart instr.</div>
+</div></figure>
+<ol class="tight">
+<li>The CPU references a page whose page-table entry is marked not-present; the MMU raises a <b>page
+fault</b> exception (Part I).</li>
+<li>The kernel's handler checks the address is legal (else <code>SIGSEGV</code>), then finds a free
+frame (evicting one if needed, flow 13).</li>
+<li>It reads the page from disk (or zero-fills a new page), updates the page table (frame + present bit)
+and TLB.</li>
+<li>It <b>restarts the faulting instruction</b>, which now succeeds. (A minor fault needs no disk I/O; a
+major fault does — Part VIII.)</li>
+</ol>
+
+<!-- ================= 15 ================= -->
+<h2 class="s" id="s16-15">&hellip;a context switch happens?</h2>
+<ol class="tight">
+<li>A trigger fires: timer interrupt (time slice up), a blocking syscall, or a higher-priority wakeup.</li>
+<li>The kernel <b>saves</b> the running process's registers and PC into its PCB and updates its state
+(Running &rarr; Ready/Waiting).</li>
+<li>The scheduler picks the next process; the kernel <b>restores</b> its registers/PC and switches the
+address space (loads its page-table base) — which may flush the TLB (Part II/VII).</li>
+<li>Execution resumes in the new process. The save/restore + cold caches are pure <b>overhead</b>.</li>
+</ol>
+
+<!-- ================= 16 ================= -->
+<h2 class="s" id="s16-16">&hellip;a process terminates?</h2>
+<ol class="tight">
+<li>The process calls <code>exit(status)</code> (or receives a fatal signal). The kernel runs it in
+kernel mode.</li>
+<li>The kernel <b>closes</b> its file descriptors, <b>frees</b> its memory (address space, page tables),
+and releases other resources.</li>
+<li>It keeps a small <b>zombie</b> record (PID + exit status) until the parent <code>wait()</code>s
+(Part II). Any children are <b>reparented</b> to PID 1.</li>
+<li>When the parent reaps it, the PCB is freed and the PID becomes reusable.</li>
+</ol>
+
+<!-- ================= 17 ================= -->
+<h2 class="s" id="s16-17">&hellip;a thread blocks?</h2>
+<ol class="tight">
+<li>The thread performs a blocking operation (I/O, lock acquisition, <code>wait</code> on a condition).</li>
+<li>The kernel changes that thread's state to <b>Waiting</b> and puts it on the relevant wait queue.</li>
+<li>The scheduler picks another <b>runnable thread</b> — possibly another thread of the <em>same</em>
+process (a cheaper switch, no address-space change) or a different process.</li>
+<li>When the awaited event occurs, the thread is moved to <b>Ready</b>; it runs again when scheduled.
+Note: only <em>that thread</em> blocks — with kernel threads, the process's other threads keep running.</li>
+</ol>
+
+<!-- ================= 18 ================= -->
+<h2 class="s" id="s16-18">&hellip;two threads modify the same variable?</h2>
+<ol class="tight">
+<li>Each thread reads the variable into a register, modifies it, and writes it back — three non-atomic
+steps (Part III).</li>
+<li>If their steps <b>interleave</b>, one thread's read can predate the other's write, so one update is
+computed from a stale value and <b>overwrites</b> the other — a lost update (a <b>race condition</b>).</li>
+<li>The result depends on timing and is nondeterministic — correct on most runs, wrong occasionally.</li>
+<li>The fix: make the update <b>atomic</b> or wrap it in a <b>critical section</b> guarded by a
+mutex/atomic (Part V), so only one thread modifies it at a time.</li>
+</ol>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+These flows are the highest-value interview preparation in the book. "Walk me through what happens when
+you run a program / call <code>malloc</code> / a page faults" tests whether you truly connect the layers.
+Practice narrating three or four of these out loud until the cross-references (syscall &rarr; kernel
+&rarr; MMU &rarr; disk &rarr; scheduler) flow naturally. That fluency is exactly what "senior" sounds
+like.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XVI</div>
+  <div class="cp-body">
+    <h4>Explain each end to end (pick any five and narrate without notes)</h4>
+    <ol class="tight">
+      <li>Booting from power-on to login.</li>
+      <li>Running a C program from the shell (<code>fork</code>+<code>exec</code>+runtime+<code>main</code>).</li>
+      <li>A single <code>printf</code> — why it may make zero or one <code>write</code> syscalls.</li>
+      <li>A page fault, minor vs major.</li>
+      <li>A context switch and where its overhead comes from.</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>Trace what happens from pressing a key to your shell echoing the character.</li>
+      <li>Trace a network request from your <code>recv()</code> back to the NIC.</li>
+      <li>Explain, using flows 13–14, why a memory-starved server slows to a crawl before the OOM killer fires.</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The <code>fork</code>/<code>exec</code> program-launch path &middot; <code>printf</code> buffering
+    &rarr; <code>write</code> &middot; the full page-fault path &middot; how a keypress reaches a blocked
+    process.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Pick flow 3 (running a C program) and <em>verify</em> it: write a tiny C program, compile it, and run
+    <code>strace ./a.out</code>. Match each syscall in the trace to a step in the flow —
+    <code>execve</code>, <code>brk</code>/<code>mmap</code> (malloc), <code>openat</code>/<code>read</code>,
+    <code>write</code>, <code>exit_group</code>. Seeing the flow as real syscalls makes it permanent.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can narrate any of the eighteen flows
+    smoothly, naming the hardware, the syscalls, the kernel subsystems, and the earlier chapters each
+    step draws on.</p>
+  </div>
+</div>

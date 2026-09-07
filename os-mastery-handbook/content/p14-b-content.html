@@ -1,0 +1,206 @@
+<!-- ===================== PART XIV CONTENT ===================== -->
+<h1 class="chapter" id="ch14" data-run="Linux Practical OS"><span class="chnum">Part XIV</span>Linux Practical OS</h1>
+
+<p class="lead">You can read about processes and page faults forever, but nothing cements them like
+watching them happen. Every command here is a window onto a concept from earlier parts. Type them.
+Break things. The kernel is right there, and Linux lets you look inside it.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-1">Watching Processes: ps, top, htop</h2>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it does</th><th>OS concept it shows</th></tr></thead>
+<tbody>
+<tr><td><code>ps</code></td><td>Snapshot of current processes (PID, state, CPU, memory, command)</td><td>Processes, PCB fields, process states (Part II)</td></tr>
+<tr><td><code>top</code></td><td>Live, updating view of processes and system load</td><td>Scheduling, CPU/memory sharing, states (Parts II, IV)</td></tr>
+<tr><td><code>htop</code></td><td>Friendlier interactive <code>top</code> (per-core bars, tree view, scroll)</td><td>Multi-core, process tree, priorities (Parts III, IV)</td></tr>
+</tbody>
+</table>
+<pre><span class="ttl">Example: see every process with full detail</span>$ ps aux
+USER   PID %CPU %MEM   VSZ   RSS STAT  COMMAND
+root     1  0.0  0.1 16942  9120 Ss    /sbin/init      <span class="cm"># PID 1 = init/systemd</span>
+user  2413 12.0  3.4  ...   ...  R     firefox         <span class="cm"># R = Running/Runnable</span>
+user  2610  0.0  0.1  ...   ...  S     bash            <span class="cm"># S = Sleeping (Waiting)</span>
+user  3001  0.0  0.0     0     0 Z     &lt;defunct&gt;       <span class="cm"># Z = Zombie! (Part II)</span></pre>
+<p>The <b>STAT</b> column is the process state from Part II made visible: <code>R</code> runnable,
+<code>S</code> interruptible sleep (waiting), <code>D</code> uninterruptible sleep (usually disk I/O),
+<code>Z</code> zombie, <code>T</code> stopped. <b>VSZ</b> is virtual memory size, <b>RSS</b> is
+resident (physical) memory — the virtual vs physical distinction from Part VII, right there.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-2">Controlling Processes: kill, nice, renice</h2>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it does</th><th>OS concept it shows</th></tr></thead>
+<tbody>
+<tr><td><code>kill</code></td><td>Send a signal to a process (default <code>SIGTERM</code>)</td><td>Signals as IPC (Part XI), process termination</td></tr>
+<tr><td><code>nice</code></td><td>Start a process with a given scheduling priority</td><td>Priority scheduling (Part IV)</td></tr>
+<tr><td><code>renice</code></td><td>Change the priority of a <em>running</em> process</td><td>Dynamic priority, dispatcher (Part IV)</td></tr>
+</tbody>
+</table>
+<pre><span class="ttl">Signals and priorities in action</span>$ kill 2413            <span class="cm"># polite SIGTERM: "please exit"</span>
+$ kill -9 2413         <span class="cm"># SIGKILL: force-kill, cannot be caught (Part XI)</span>
+$ kill -SIGSTOP 2413   <span class="cm"># pause it (→ state T);  kill -SIGCONT resumes</span>
+
+$ nice -n 19 ./batch   <span class="cm"># lowest priority (19 = nicest, yields CPU to others)</span>
+$ sudo renice -5 -p 2413   <span class="cm"># raise firefox's priority (negative = higher)</span></pre>
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — the nice value</div>
+Linux "niceness" ranges from <b>&minus;20</b> (highest priority, least nice) to <b>+19</b> (lowest
+priority, nicest). A "nicer" process yields the CPU to others. This is your hands-on control over the
+priority scheduler from Part IV — set a CPU-hungry backup job to <code>nice 19</code> and it won't
+disturb your interactive work.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-3">Job Control: jobs, fg, bg</h2>
+<p>The shell manages the processes it launches as <b>jobs</b>. This is process control and terminal
+sessions in miniature.</p>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it does</th></tr></thead>
+<tbody>
+<tr><td><kbd>Ctrl-Z</kbd></td><td>Suspend the foreground job (sends <code>SIGTSTP</code> &rarr; state T)</td></tr>
+<tr><td><code>bg</code></td><td>Resume the suspended job in the <b>background</b> (keeps running, frees your prompt)</td></tr>
+<tr><td><code>fg</code></td><td>Bring a background job back to the <b>foreground</b></td></tr>
+<tr><td><code>jobs</code></td><td>List the shell's jobs and their states</td></tr>
+<tr><td><code>&amp;</code></td><td>Start a command directly in the background: <code>./server &amp;</code></td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-4">Open Files: lsof</h2>
+<p><code>lsof</code> ("list open files") reveals every file descriptor every process holds — and since
+in UNIX <em>everything is a file</em>, that includes regular files, sockets, pipes, and devices. It
+makes the fd tables from Part IX tangible.</p>
+<pre><span class="ttl">What has this file/port open?</span>$ lsof /var/log/syslog     <span class="cm"># which processes hold this file open?</span>
+$ lsof -i :8080            <span class="cm"># which process is listening on port 8080? (sockets = fds)</span>
+$ lsof -p 2413             <span class="cm"># every fd process 2413 has open</span></pre>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-5">Memory &amp; Disk: free, df, du</h2>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it does</th><th>OS concept</th></tr></thead>
+<tbody>
+<tr><td><code>free -h</code></td><td>Physical RAM and swap usage, including cache</td><td>Virtual memory, page cache, swap (Part VIII)</td></tr>
+<tr><td><code>df -h</code></td><td>Free space per mounted <em>file system</em></td><td>Mounting, file systems (Part IX)</td></tr>
+<tr><td><code>du -sh dir</code></td><td>Disk usage of a directory tree</td><td>File allocation, directory trees (Part IX)</td></tr>
+</tbody>
+</table>
+<pre><span class="ttl">Reading `free` correctly</span>$ free -h
+              total    used    free   shared  buff/cache   available
+Mem:           15Gi   4.2Gi   1.1Gi   210Mi       9.9Gi       10Gi
+Swap:         2.0Gi      0B   2.0Gi</pre>
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Panicking that "free" is low. Linux deliberately uses "spare" RAM as <b>page cache</b> (Part VIII) to
+speed up file access — that's the <code>buff/cache</code> column. It's instantly reclaimable, so the
+number that matters is <b>available</b>, not <b>free</b>. "Unused RAM is wasted RAM" is the kernel's
+philosophy.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-6">System Activity: vmstat, iostat</h2>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it shows</th><th>Watch for</th></tr></thead>
+<tbody>
+<tr><td><code>vmstat 1</code></td><td>Per-second processes, memory, swap, I/O, CPU</td><td><code>si</code>/<code>so</code> (swap in/out) &rarr; <b>thrashing</b> (Part VIII); <code>r</code> (run queue length)</td></tr>
+<tr><td><code>iostat -x 1</code></td><td>Per-device I/O throughput and utilization</td><td><code>%util</code> near 100% &rarr; disk is the bottleneck</td></tr>
+</tbody>
+</table>
+<pre><span class="ttl">vmstat: watch swap columns to catch thrashing</span>$ vmstat 1
+ r  b   swpd   free  buff  cache   si   so    bi    bo   in   cs us sy id wa
+ 2  0      0  1.1G  120M  9.9G    0    0    12    30  400  900 15  4 80  1
+ 8  3      0   90M   40M  2.1G  512  480  9000  200 3000 8000 20 30  5 45  <span class="cm"># si/so high, wa high = THRASHING</span></pre>
+<p>The last line is a system in trouble: high <code>si</code>/<code>so</code> (swapping), high
+<code>wa</code> (CPU idle waiting on I/O), long run queue <code>r</code>. This is exactly the
+thrashing collapse from Part VIII, visible in real time.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-7">Seeing the Kernel Boundary: strace, dmesg</h2>
+<table class="avoid">
+<thead><tr><th style="width:12%">Command</th><th>What it does</th><th>OS concept</th></tr></thead>
+<tbody>
+<tr><td><code>strace</code></td><td>Traces every <b>system call</b> a program makes</td><td>The user/kernel boundary made visible (Part I)</td></tr>
+<tr><td><code>dmesg</code></td><td>Prints the kernel's message ring buffer (boot, drivers, hardware, OOM)</td><td>Boot process, drivers, kernel events (Parts I, X)</td></tr>
+</tbody>
+</table>
+<pre><span class="ttl">strace: literally watch a program cross into the kernel</span>$ strace -f ./a.out
+execve("./a.out", ...)          = 0
+brk(NULL)                       = 0x55...        <span class="cm"># heap setup (malloc, Part VII)</span>
+openat(AT_FDCWD, "data.txt", O_RDONLY) = 3       <span class="cm"># open → fd 3 (Part IX)</span>
+read(3, "hello\n", 4096)        = 6              <span class="cm"># the actual read syscall</span>
+write(1, "hello\n", 6)          = 6              <span class="cm"># write to stdout</span>
+close(3)                        = 0
+exit_group(0)                   = ?</pre>
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+<code>strace</code> is the single best learning and debugging tool for OS concepts. When someone asks
+"what system calls does <code>X</code> make?" you can <em>show</em> them. It's also how you debug
+mysterious failures — a program hanging in <code>read()</code>, or getting <code>EACCES</code> on a
+file, is obvious in the trace. Mentioning <code>strace</code> in an interview signals you actually work
+with systems, not just theory.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s14-8">The Pseudo File Systems: /proc, /sys, /dev</h2>
+<p>Linux exposes kernel and hardware state as <em>files</em> you can read — the "everything is a file"
+philosophy taken to its logical end. No special API needed; just <code>cat</code>.</p>
+<dl>
+<dt>/proc</dt><dd>A virtual file system reflecting <b>kernel and process state</b>. It doesn't exist on
+disk — the kernel generates it on read. This is how <code>ps</code>, <code>top</code>, and
+<code>free</code> get their data.</dd>
+<dt>/proc/[pid]</dt><dd>One directory per running process, named by PID — a live view of that process's
+PCB: <code>/proc/1234/status</code> (state, memory), <code>/proc/1234/fd/</code> (its open file
+descriptors), <code>/proc/1234/maps</code> (its virtual memory layout, Part VII), <code>cmdline</code>,
+<code>environ</code>.</dd>
+<dt>/sys</dt><dd>Exposes <b>devices and kernel subsystems</b> (the device model) — e.g.
+<code>/sys/block/sda/queue/scheduler</code> shows/sets the disk I/O scheduler (Part XII).</dd>
+<dt>/dev</dt><dd>Holds <b>device files</b>: <code>/dev/sda</code> (a disk), <code>/dev/null</code> (the
+bit bucket), <code>/dev/random</code>, <code>/dev/tty</code>. Reading/writing these talks to drivers
+(Part X).</dd>
+</dl>
+<pre><span class="ttl">Reading kernel and process state as plain files</span>$ cat /proc/cpuinfo                  <span class="cm"># every CPU core and its features</span>
+$ cat /proc/meminfo                  <span class="cm"># detailed memory stats (source of `free`)</span>
+$ cat /proc/self/maps                <span class="cm"># THIS shell's virtual address space (Part VII)</span>
+$ cat /proc/1234/status              <span class="cm"># process 1234's live PCB summary</span>
+$ ls /proc/1234/fd                   <span class="cm"># its open file descriptors (Part IX)</span>
+$ echo hi > /dev/null                <span class="cm"># discard output into the void</span></pre>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<code>/proc</code> and <code>/sys</code> are <b>the kernel talking to you in file form</b>. Every
+monitoring tool in this chapter is, underneath, just reading these virtual files and formatting them.
+Once you know that, you can get <em>any</em> system fact with <code>cat</code> — no special tooling
+required. This is the deepest expression of the UNIX "everything is a file" design.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XIV</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>In <code>ps</code>, what do STAT codes R, S, D, Z, T mean, and to which Part II concept does each map?</li>
+      <li>What's the difference between VSZ and RSS, and which Part VII idea is that?</li>
+      <li>Why should you read <b>available</b>, not <b>free</b>, from <code>free -h</code>?</li>
+      <li>What does <code>strace</code> reveal, and which boundary does it make visible?</li>
+      <li>What are <code>/proc</code> and <code>/sys</code>, and where does their data come from?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>A backup job is slowing your machine. Which command lowers its CPU priority, and what value would you use?</li>
+      <li>Using <code>vmstat</code>, which columns tell you the system is thrashing?</li>
+      <li>A process holds a file you can't delete. Which command finds it, and how?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"How would you find which process is listening on port 443 and what files it has open?"</li>
+      <li>"A program hangs. Walk me through diagnosing it with <code>strace</code> and <code>/proc</code>."</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Mapping <code>ps</code> STAT codes to process states &middot; <code>nice</code>/<code>renice</code>
+    and the scheduler &middot; reading <code>free</code> and <code>vmstat</code> for VM/thrashing &middot;
+    what <code>/proc/[pid]</code> exposes.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Run <code>sleep 1000 &amp;</code>, note its PID, then explore: <code>cat /proc/&lt;pid&gt;/status</code>,
+    <code>ls -l /proc/&lt;pid&gt;/fd</code>, <code>cat /proc/&lt;pid&gt;/maps | head</code>. Suspend and
+    resume a foreground job with <kbd>Ctrl-Z</kbd>, <code>bg</code>, <code>fg</code>. Finally
+    <code>strace -c ls</code> and read the syscall summary. You've now inspected a live process from the
+    outside — exactly what <code>top</code> does.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can pick the right tool to observe any
+    concept from Parts I–XIII on a running system, and read its output back to the underlying theory.</p>
+  </div>
+</div>

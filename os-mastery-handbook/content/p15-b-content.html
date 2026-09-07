@@ -1,0 +1,183 @@
+<!-- ===================== PART XV CONTENT ===================== -->
+<h1 class="chapter" id="ch15" data-run="Advanced Operating Systems"><span class="chnum">Part XV</span>Advanced Operating Systems</h1>
+
+<p class="lead">Everything so far runs one OS on one machine. This part scales that up and locks it
+down: how one machine runs many operating systems, how thousands of containers share one kernel safely,
+and the kernel mechanisms — modern scheduling, NUMA, ASLR, the page cache — behind today's servers.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-1">Virtualization and Hypervisors</h2>
+<p><b>What.</b> <span class="term">Virtualization</span> runs a whole "virtual machine" (VM) — a
+complete guest OS with its own virtual CPU, memory, and devices — as software on a host. A
+<span class="term">hypervisor</span> (Virtual Machine Monitor) is the layer that creates and manages
+VMs, giving each the illusion of owning the hardware while multiplexing the real hardware among them.
+It's the OS's "resource manager" and "extended machine" ideas (Part I) applied to entire operating
+systems.</p>
+<dl>
+<dt>Type 1 (bare-metal)</dt><dd>Runs directly on the hardware; guests sit on top. Fast, used in data
+centers. Examples: VMware ESXi, Xen, Microsoft Hyper-V, KVM (turns Linux itself into a Type-1-like
+hypervisor).</dd>
+<dt>Type 2 (hosted)</dt><dd>Runs as an application on a normal host OS. Convenient for desktops.
+Examples: VirtualBox, VMware Workstation.</dd>
+</dl>
+<p>Hardware assists (Intel VT-x, AMD-V) let guest kernels run privileged instructions safely by trapping
+into the hypervisor — the same dual-mode idea from Part I, extended with an extra privilege level for
+the hypervisor beneath the guest kernel.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-2">Containers: Namespaces and cgroups</h2>
+<p><b>The key difference from VMs.</b> A VM virtualizes <em>hardware</em> and runs a full guest kernel.
+A <b>container</b> virtualizes the <em>operating system</em>: containers share the <b>host's single
+kernel</b> but each gets an isolated view of the system. Containers are therefore far lighter (no guest
+OS to boot, megabytes not gigabytes, start in milliseconds) — at the cost of weaker isolation (a shared
+kernel is a shared attack surface).</p>
+
+<figure class="diagram">
+<div class="asciiart">   VIRTUAL MACHINES                    CONTAINERS
+   ┌──────┐┌──────┐┌──────┐           ┌──────┐┌──────┐┌──────┐
+   │ App  ││ App  ││ App  │           │ App  ││ App  ││ App  │
+   │Guest ││Guest ││Guest │           └──────┘└──────┘└──────┘
+   │ OS   ││ OS   ││ OS   │           ┌───────────────────────┐
+   └──────┘└──────┘└──────┘           │  container engine     │
+   ┌───────────────────────┐          ├───────────────────────┤
+   │      Hypervisor        │         │   ONE shared host OS   │
+   ├───────────────────────┤          │   kernel (ns + cgroups)│
+   │       Hardware         │         ├───────────────────────┤
+   └───────────────────────┘          │       Hardware         │
+   heavy, strong isolation             light, shared kernel</div>
+<figcaption>VMs each carry a full guest OS on a hypervisor; containers share one host kernel, isolated by namespaces and cgroups.</figcaption>
+</figure>
+
+<p>Containers are built from two Linux kernel features:</p>
+<dl>
+<dt>Namespaces — isolation ("what a process can see")</dt><dd>Give a process group its own private view
+of a system resource. There are namespaces for PIDs (a container sees its own process 1), the mount
+table (its own filesystem view), the network (its own interfaces/ports), users, hostname (UTS), and
+IPC. Two containers can each have a "PID 1" because they're in different PID namespaces.</dd>
+<dt>Control groups (cgroups) — limits ("what a process can use")</dt><dd>Meter and cap a process group's
+CPU, memory, and I/O. A cgroup can say "this container gets at most 2 cores and 512&nbsp;MB." This is
+the resource-manager role of the OS (Part I) exposed as a policy knob.</dd>
+</dl>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — Docker from an OS perspective</div>
+A Docker container is <em>not</em> a lightweight VM. It's an ordinary Linux process (or group of them)
+running on the host kernel, wrapped in <b>namespaces</b> (so it sees only its own PIDs, filesystem,
+network) and <b>cgroups</b> (so its CPU/memory are capped), using a <b>union filesystem</b> (layered
+images) for its root filesystem. Nothing is emulated — it's your kernel's isolation features, packaged.
+That's why containers start instantly and run at native speed.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-3">Kernel Modules</h2>
+<p>A <span class="term">loadable kernel module</span> is a piece of kernel code (often a device driver)
+that can be added to or removed from a running kernel <em>without rebooting or recompiling</em>. This is
+what makes Linux a <b>modular</b> monolithic kernel (Part I): the core is monolithic, but drivers and
+features plug in on demand.</p>
+<pre><span class="ttl">Managing kernel modules</span>$ lsmod                    <span class="cm"># list currently loaded modules</span>
+$ sudo modprobe e1000e     <span class="cm"># load a network driver (+ dependencies)</span>
+$ sudo rmmod e1000e        <span class="cm"># unload it</span>
+$ modinfo e1000e           <span class="cm"># info about a module</span></pre>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-4">System Initialization</h2>
+<p>After the kernel boots (Part I), it starts exactly one user process: <b>PID 1</b>, the
+<b>init system</b>. On modern Linux this is <code>systemd</code>. PID 1 is the ancestor of every other
+process; it launches system services (daemons), mounts filesystems, brings up networking, and adopts
+orphans (Part II). <code>systemd</code> organizes services as <b>units</b> with dependencies and starts
+independent ones in parallel for fast boot.</p>
+<pre><span class="ttl">Interacting with the init system</span>$ systemctl status sshd    <span class="cm"># is the SSH daemon running?</span>
+$ systemctl start/stop/restart nginx
+$ systemctl enable nginx    <span class="cm"># start automatically at boot</span>
+$ journalctl -u nginx       <span class="cm"># view that service's logs</span></pre>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-5">Modern Scheduling and NUMA</h2>
+<p><b>CFS.</b> Linux's long-time default scheduler was the <b>Completely Fair Scheduler</b>. Instead of
+fixed time slices, CFS tracks each task's <b>virtual runtime</b> (vruntime) — roughly, how much CPU it
+has consumed, weighted by nice value — and always runs the task with the smallest vruntime, using a
+red-black tree to pick it in O(log n). The effect: every task gets a fair share of the CPU over time,
+approximating "infinitely fine" time-slicing. (Newer kernels use EEVDF, a refinement of the same
+fairness goal.)</p>
+<p><b>NUMA.</b> On multi-socket servers, memory is <b>Non-Uniform Memory Access</b>: each CPU has "local"
+RAM it reaches quickly and "remote" RAM (attached to another CPU) it reaches more slowly. A NUMA-aware
+OS tries to run a thread on the CPU near the memory it uses, and to allocate a process's memory on its
+local node — because a remote memory access can be several times slower. It's the memory hierarchy
+(Part VII) extended across CPU sockets.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-6">Kernel Memory Features: Page Cache, ASLR, mmap I/O, COW</h2>
+<dl>
+<dt>Page cache</dt><dd>The kernel caches file contents in otherwise-free RAM (Part VIII). A re-read of a
+file is served from memory, not disk — the <code>buff/cache</code> you saw in <code>free</code> (Part
+XIV). Writes are buffered and flushed later. This one feature is why a warm system feels so much faster
+than a cold one.</dd>
+<dt>Memory-mapped I/O</dt><dd>Via <code>mmap</code> (Part VIII), a file or device is mapped into a
+process's address space so accessing it is just memory access — avoiding <code>read</code>/<code>write</code>
+syscalls and extra copies. It's how program executables and shared libraries are loaded (demand-paged
+directly from disk).</dd>
+<dt>Copy-on-Write</dt><dd>Recap from Part VIII: <code>fork()</code> and shared libraries share physical
+pages read-only and duplicate only on write — the trick that makes process creation and library sharing
+cheap.</dd>
+<dt>ASLR</dt><dd><b>Address Space Layout Randomization</b>: the kernel randomizes where a process's
+stack, heap, libraries, and (with PIE) code are placed in its virtual address space on each run. Because
+attackers exploiting a buffer overflow need to know target addresses, randomizing them makes many
+exploits unreliable. A cheap, powerful security-through-uncertainty layer built on virtual memory.</dd>
+</dl>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"How does a container differ from a VM?" One sentence: <em>a VM virtualizes hardware and runs its own
+guest kernel via a hypervisor; a container shares the host kernel and is isolated by namespaces
+(visibility) and cgroups (resource limits)</em>. Then the trade-off: VMs give stronger isolation and can
+run different OSes; containers are lighter and faster but share one kernel. That crisp distinction is
+asked constantly in cloud/DevOps interviews.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s15-7">Kernel/User-Space Communication</h2>
+<p>How does user code exchange information with the kernel, beyond ordinary system calls? A quick map:</p>
+<ul class="tight">
+<li><b>System calls</b> — the primary, synchronous request path (Part I).</li>
+<li><b>/proc and /sys</b> — read/write kernel and device state as files (Part XIV).</li>
+<li><b>ioctl</b> — device-specific control operations on a file descriptor.</li>
+<li><b>mmap</b> — share a memory region between kernel and user space (zero-copy).</li>
+<li><b>Signals</b> — kernel &rarr; process asynchronous notifications (Part XI).</li>
+<li><b>Netlink sockets</b> — a socket-based channel for configuration/events (used for networking config).</li>
+</ul>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XV</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Type 1 vs Type 2 hypervisor — define each with examples.</li>
+      <li>How do namespaces and cgroups each contribute to a container?</li>
+      <li>Why is a container not a lightweight VM?</li>
+      <li>What does CFS optimize, and how does vruntime achieve it?</li>
+      <li>What is ASLR and which class of attack does it hinder?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>You need to run 500 isolated web apps on one server with fast startup and native speed. Containers or VMs? What isolates them?</li>
+      <li>A thread on a NUMA machine is slow. What memory-placement problem might explain it, and what's the fix?</li>
+      <li>Which Linux features would you use to cap a process to 1 CPU and 256&nbsp;MB, and give it a private network?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Explain, from an OS perspective, exactly what <code>docker run</code> sets up."</li>
+      <li>"Why does Linux use free RAM as page cache, and is that a problem?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    VM vs container (hypervisor vs namespaces+cgroups) &middot; what makes Linux modular &middot; CFS
+    fairness via vruntime &middot; page cache and ASLR.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    If Docker is available: <code>docker run --rm -it --memory=256m --cpus=1 alpine sh</code>, then inside
+    run <code>ps aux</code> (you're PID 1!) and <code>hostname</code>. From the host, find that shell in
+    <code>ps</code> — it's a normal host process. You've just seen namespaces (isolated PID/hostname) and
+    cgroups (the limits) in action. Also run <code>lsmod | head</code> and <code>systemctl --type=service</code>.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can explain containers and VMs to a
+    non-expert precisely, connect namespaces/cgroups to the OS concepts they implement, and describe how
+    modern kernels schedule and protect memory.</p>
+  </div>
+</div>

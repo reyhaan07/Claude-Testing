@@ -326,6 +326,17 @@ figcaption { font-family:"DejaVu Sans",sans-serif; font-size: 8.4pt; color: var(
 }
 .toc .toc-front a::after { content: " " leader('. ') " " target-counter(attr(href), page); }
 
+/* ---------- Project cards ---------- */
+.proj { break-inside: avoid; border: 1px solid var(--rule); border-left: 4px solid var(--primary-2);
+  border-radius: 6px; padding: 8pt 12pt 9pt; margin: .7em 0 1em; background: #fbfcfe; }
+.proj h3 { margin: 0 0 5pt; color: var(--primary); display: flex; align-items: baseline; gap: 8pt; }
+.proj h3 .pn { font-family:"DejaVu Sans Mono",monospace; color: var(--primary-2); font-size: 11pt; }
+.proj dl { margin: 0; display: grid; grid-template-columns: max-content 1fr; gap: 2pt 10pt; }
+.proj dt { color: var(--primary-2); font-size: 8.6pt; font-family:"DejaVu Sans",sans-serif;
+  text-transform: uppercase; letter-spacing:.4px; padding-top: 1pt; }
+.proj dd { margin: 0; font-size: 9.6pt; }
+.proj .lvlband { font-family:"DejaVu Sans",sans-serif; }
+
 /* ---------- Misc ---------- */
 hr.soft { border:none; border-top:1px solid var(--rule); margin: 1.1em 0; }
 .lead { font-size: 11.4pt; color: var(--ink-soft); line-height: 1.6; margin-bottom: 1em; }
