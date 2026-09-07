@@ -1,0 +1,160 @@
+<!-- ===================== PART XIII CONTENT ===================== -->
+<h1 class="chapter" id="ch13" data-run="Networking from an OS Perspective"><span class="chnum">Part XIII</span>Networking from an OS Perspective</h1>
+
+<p class="lead">Networking is really just I/O to a very special, very slow device: the network. Everything
+you learned about system calls, interrupts, DMA, and buffering applies — the socket is the file
+descriptor, the NIC is the device, and the kernel's network stack is the driver's very elaborate cousin.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s13-1">The Network Stack</h2>
+<p>Networking is built in layers, each adding a header and a job. From an OS standpoint the key point is
+<em>where the boundary between your program and the kernel falls</em>: your application lives at the top;
+the kernel implements the transport and network layers; the driver and NIC handle the link.</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node u">Application &mdash; your data<span class="sub">HTTP request, chat message, etc.</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node u">Socket API<span class="sub"><code>socket</code>, <code>send</code>, <code>recv</code> &mdash; user space</span></div>
+    <div class="arr">&darr; system call</div>
+    <div class="node k">Kernel network stack<span class="sub">TCP/UDP (transport) &rarr; IP (network) &mdash; adds headers, does routing</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node k">Network driver<span class="sub">hands the packet to the NIC via DMA</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node hw">NIC (network card)<span class="sub">puts bits on the wire</span></div>
+  </div>
+  <figcaption>Sending a packet: data flows down the stack, gaining a TCP, then IP, then Ethernet header. Receiving reverses it.</figcaption>
+</figure>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — encapsulation</div>
+As data descends the stack, each layer wraps it in a header: your bytes become a <b>TCP segment</b>
+(ports, sequence numbers), then an <b>IP packet</b> (source/destination IP), then an <b>Ethernet
+frame</b> (MAC addresses). The receiver's stack strips them off in reverse. The OS owns the transport
+and network layers, which is why sending data requires crossing into the kernel.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s13-2">Sockets and the Socket API</h2>
+<p>A <span class="term">socket</span> is the OS's abstraction of a network endpoint — and, crucially,
+it is a <b>file descriptor</b>. Once connected, you <code>read()</code>/<code>write()</code> (or
+<code>recv</code>/<code>send</code>) a socket just like a file. This unification ("everything is a file
+descriptor") is why the same <code>select</code>/<code>epoll</code> machinery works for files, pipes,
+and network connections alike.</p>
+
+<pre class="long"><span class="ttl">A minimal TCP server (the classic five calls)</span><span class="kw">int</span> s = socket(AF_INET, SOCK_STREAM, 0);   <span class="cm">// 1. create a TCP socket (an fd)</span>
+bind(s, (<span class="kw">struct</span> sockaddr*)&amp;addr, <span class="kw">sizeof</span> addr); <span class="cm">// 2. attach to a port</span>
+listen(s, 128);                             <span class="cm">// 3. mark it passive; queue up to 128 pending</span>
+<span class="kw">while</span> (1) {
+    <span class="kw">int</span> c = accept(s, NULL, NULL);           <span class="cm">// 4. block until a client connects; new fd</span>
+    <span class="kw">char</span> buf[1024];
+    <span class="kw">int</span> n = recv(c, buf, <span class="kw">sizeof</span> buf, 0);      <span class="cm">// read the client's request</span>
+    send(c, buf, n, 0);                     <span class="cm">// echo it back</span>
+    close(c);                               <span class="cm">// 5. done with this client</span>
+}</pre>
+
+<p>The client side is <code>socket()</code> then <code>connect()</code>, after which it
+<code>send</code>/<code>recv</code>s. Each <code>accept()</code> returns a <em>new</em> socket fd
+dedicated to one client, while the listening socket keeps accepting more.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s13-3">TCP vs UDP</h2>
+<p>The two transport protocols the kernel offers through sockets embody a fundamental trade-off:
+reliability vs speed/overhead.</p>
+<table class="avoid">
+<thead><tr><th style="width:24%">&nbsp;</th><th>TCP (SOCK_STREAM)</th><th>UDP (SOCK_DGRAM)</th></tr></thead>
+<tbody>
+<tr><td>Connection</td><td>Connection-oriented (3-way handshake)</td><td>Connectionless (just send)</td></tr>
+<tr><td>Reliability</td><td>Guaranteed, in-order, no duplicates</td><td>Best-effort; may lose/reorder</td></tr>
+<tr><td>Flow/congestion control</td><td>Yes</td><td>No</td></tr>
+<tr><td>Overhead / latency</td><td>Higher (ACKs, retransmits, state)</td><td>Lower — minimal</td></tr>
+<tr><td>Data model</td><td>Byte stream (no message boundaries)</td><td>Discrete datagrams (boundaries kept)</td></tr>
+<tr><td>Use for</td><td>Web, files, email, SSH — correctness matters</td><td>Video/voice, gaming, DNS — speed matters</td></tr>
+</tbody>
+</table>
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Expecting TCP to preserve message boundaries. TCP is a <b>byte stream</b>: two <code>send()</code>s of
+100 bytes may arrive as one <code>recv()</code> of 200, or as 50+150. Your protocol must delimit
+messages itself (length prefix or delimiter). UDP <em>does</em> keep boundaries — one
+<code>sendto</code> = one <code>recvfrom</code> — but may drop or reorder them.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s13-4">Kernel Networking: NIC, Interrupts, and DMA</h2>
+<p>Here Part X's I/O machinery does the heavy lifting. When a packet <b>arrives</b>:</p>
+<ol class="tight">
+<li>The <b>NIC</b> receives the frame off the wire and, via <b>DMA</b>, writes it straight into a kernel
+<b>receive buffer</b> in RAM — no CPU copying.</li>
+<li>The NIC raises an <b>interrupt</b> to tell the CPU "a packet is here."</li>
+<li>The driver's interrupt handler does minimal work, then defers the heavy processing (a "bottom half"
+/ softirq) so the interrupt returns fast.</li>
+<li>The kernel network stack processes the packet up through IP and TCP (checksums, reassembly, sequencing),
+placing the payload in the socket's receive buffer.</li>
+<li>The waiting process's <code>recv()</code> unblocks and copies the data into the app's buffer.</li>
+</ol>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — interrupt storms and NAPI</div>
+At high packet rates, one interrupt <em>per packet</em> can swamp the CPU (an "interrupt storm"). Real
+kernels use <b>interrupt coalescing</b> and Linux's <b>NAPI</b>, which switches from interrupts to
+<em>polling</em> under heavy load — the exact polling-vs-interrupt trade-off from Part X, applied to
+networking. Each packet is held in a kernel buffer structure (Linux's <code>sk_buff</code>) as it moves
+through the layers, avoiding repeated copies.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s13-5">Blocking Sockets, Non-Blocking Sockets, and Scale</h2>
+<p>A simple server dedicates one thread per connection, each blocked in <code>recv()</code>. That's easy
+but doesn't scale: 100,000 connections would need 100,000 threads — enormous memory and context-switch
+overhead. This is the historic <b>C10K problem</b> (handling 10,000+ concurrent connections).</p>
+<p>The solution is <b>non-blocking sockets</b> plus an <b>event-notification</b> system call. One (or a
+few) threads ask the kernel "which of these thousands of sockets are ready?" and service only those:</p>
+<ul class="tight">
+<li><code>select</code>/<code>poll</code> — portable but O(n): scan all fds each call.</li>
+<li><code>epoll</code> (Linux) / <code>kqueue</code> (BSD/macOS) — scalable, O(1)-ish: the kernel keeps
+the interest list and returns only the <em>ready</em> fds.</li>
+<li><code>io_uring</code> (modern Linux) — full asynchronous I/O with shared ring buffers, minimizing
+system calls entirely.</li>
+</ul>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"How does a server handle 100k connections?" Not with 100k threads. Use <b>non-blocking sockets + an
+event loop</b> (<code>epoll</code>): a small thread pool waits on the kernel to report which sockets are
+readable/writable, then handles just those. This is how nginx, Redis, and Node.js scale. The idea traces
+straight back to non-blocking + async I/O from Part X — networking is just I/O at scale.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XIII</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Trace the layers a message passes through from <code>send()</code> to the wire.</li>
+      <li>Why is a socket "just a file descriptor," and why does that matter?</li>
+      <li>Give three concrete differences between TCP and UDP and a use case for each.</li>
+      <li>How do interrupts and DMA cooperate when a packet arrives?</li>
+      <li>What is the C10K problem and the modern solution?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>You <code>send()</code> "AB" then "CD" over TCP. List the ways the receiver's two
+      <code>recv()</code> calls might split those four bytes, and how you'd fix it.</li>
+      <li>A game needs low latency and tolerates occasional lost position updates. TCP or UDP? Why?</li>
+      <li>Explain why one-thread-per-connection fails at 100k connections and what replaces it.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Walk me through what the kernel does from a packet hitting the NIC to your <code>recv()</code> returning."</li>
+      <li>"Why is <code>epoll</code> more scalable than <code>select</code>?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The send-path layer stack &middot; socket = fd &middot; TCP vs UDP &middot; NIC + DMA + interrupt on
+    receive &middot; blocking vs non-blocking and why <code>epoll</code> scales.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Run <code>ss -tunap</code> (or <code>netstat -tunap</code>) to list sockets and the processes owning
+    them. Then <code>strace -e trace=network curl -s example.com &gt;/dev/null</code> to watch the exact
+    <code>socket</code>/<code>connect</code>/<code>sendto</code>/<code>recvfrom</code> calls a real HTTP
+    request makes — the socket API from this chapter, live.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can write the five-call TCP server from
+    memory, explain the packet's journey through kernel and NIC, and describe how an event loop scales a
+    server past the thread-per-connection limit.</p>
+  </div>
+</div>

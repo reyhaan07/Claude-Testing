@@ -1,0 +1,181 @@
+<!-- ===================== PART XII CONTENT ===================== -->
+<h1 class="chapter" id="ch12" data-run="Storage Systems"><span class="chnum">Part XII</span>Storage Systems</h1>
+
+<p class="lead">Storage is where the millisecond world of mechanics meets the nanosecond world of the
+CPU. Because a disk seek is millions of times slower than a memory access, the <em>order</em> in which
+the OS serves disk requests matters enormously — and RAID is how we make many imperfect disks into one
+reliable, fast whole.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s12-1">HDD vs SSD</h2>
+<p>A <b>Hard Disk Drive (HDD)</b> stores data magnetically on spinning <b>platters</b>. Data sits in
+concentric <b>tracks</b>, divided into <b>sectors</b>; the same track across stacked platters forms a
+<b>cylinder</b>. A moving <b>read/write head</b> on an arm must physically reach the data. So an HDD
+access has three time components:</p>
+<div class="formula">Access time = <b>seek time</b> (move head to track) + <b>rotational latency</b> (wait for sector to spin under head) + <b>transfer time</b></div>
+<p>Seek time dominates and is mechanical — which is exactly why request <em>ordering</em> (scheduling)
+can hugely reduce total head movement.</p>
+
+<p>A <b>Solid-State Drive (SSD)</b> stores data in flash memory — <em>no moving parts</em>. Any block
+is reachable in roughly constant time, so there is <b>no seek or rotational latency</b>. SSDs are far
+faster (especially for random access), silent, and shock-resistant, but cost more per GB and have
+limited write-erase cycles (managed by <b>wear leveling</b>).</p>
+
+<table class="avoid">
+<thead><tr><th style="width:26%">&nbsp;</th><th>HDD</th><th>SSD</th></tr></thead>
+<tbody>
+<tr><td>Mechanism</td><td>Spinning magnetic platters + moving head</td><td>Flash memory, no moving parts</td></tr>
+<tr><td>Random access</td><td>Slow (seek + rotation, ~ms)</td><td>Very fast (~µs), roughly uniform</td></tr>
+<tr><td>Seek time</td><td>Yes — dominates latency</td><td>None</td></tr>
+<tr><td>Durability</td><td>Fragile (moving parts)</td><td>Shock-resistant; limited write cycles</td></tr>
+<tr><td>Cost / GB</td><td>Cheap</td><td>Higher</td></tr>
+<tr><td>Scheduling matters?</td><td><b>Yes</b> — reduce head movement</td><td>Less so (no seeks)</td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s12-2">Disk Scheduling</h2>
+<p>When several I/O requests are queued for an HDD, the OS chooses the service order to minimize total
+head movement (and thus seek time). We evaluate algorithms by <b>total head movement</b> across a
+request queue.</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Shared example for every algorithm</div>
+Request queue (cylinders): <span class="kv">98, 183, 37, 122, 14, 124, 65, 67</span>. Head starts at
+<b>53</b>; disk has cylinders 0–199; for directional algorithms the head is moving <b>toward higher
+numbers</b>.</div>
+
+<h3>FCFS — First-Come, First-Served</h3>
+<p>Serve requests in arrival order. Fair, but the head can whipsaw across the disk.</p>
+<p class="small">53&rarr;98&rarr;183&rarr;37&rarr;122&rarr;14&rarr;124&rarr;65&rarr;67. Movement =
+45+85+146+85+108+110+59+2 = <b>640 cylinders</b>.</p>
+
+<h3>SSTF — Shortest Seek Time First</h3>
+<p>Always serve the closest request to the current head position. Greatly reduces movement, but can
+<b>starve</b> far-away requests (analogous to SJF).</p>
+<p class="small">53&rarr;65&rarr;67&rarr;37&rarr;14&rarr;98&rarr;122&rarr;124&rarr;183. Movement =
+12+2+30+23+84+24+2+59 = <b>236 cylinders</b>.</p>
+
+<h3>SCAN — the Elevator Algorithm</h3>
+<p>The head sweeps in one direction serving all requests, reaches the <b>end of the disk</b>, then
+reverses. Like an elevator going all the way up, then all the way down. No starvation; fairer than
+SSTF.</p>
+<p class="small">Moving up: 53&rarr;65&rarr;67&rarr;98&rarr;122&rarr;124&rarr;183&rarr;<b>199</b> (end),
+then down &rarr;37&rarr;14. Movement = (199&minus;53) + (199&minus;14) = 146+185 = <b>331 cylinders</b>.</p>
+
+<h3>C-SCAN — Circular SCAN</h3>
+<p>Like SCAN, but after reaching the end it <b>jumps straight back to the start</b> (0) without
+servicing on the return, then sweeps up again. This gives more <b>uniform</b> wait times (every
+cylinder is treated the same way), avoiding SCAN's bias toward the middle.</p>
+<p class="small">Up: 53&rarr;&hellip;&rarr;183&rarr;199, jump to 0, then 0&rarr;14&rarr;37. Movement =
+(199&minus;53) + (199) + (37) = 146+199+37 = <b>382 cylinders</b> (the 199 is the return sweep).</p>
+
+<h3>LOOK and C-LOOK</h3>
+<p>The practical versions of SCAN/C-SCAN: instead of going all the way to the physical end, the head
+only goes as far as the <b>last request</b> in that direction, then reverses (LOOK) or jumps back
+(C-LOOK). Saves the wasted travel to the disk edge.</p>
+<p class="small"><b>LOOK</b>: up to 183 (last request), then down to 14. Movement = (183&minus;53) +
+(183&minus;14) = 130+169 = <b>299</b>. &emsp; <b>C-LOOK</b>: up to 183, jump to 14, up to 37. Movement
+= 130 + 169 + 23 = <b>322</b>.</p>
+
+<table class="avoid" style="width:78%">
+<thead><tr><th>Algorithm</th><th class="c">Head movement</th><th>Note</th></tr></thead>
+<tbody>
+<tr><td>FCFS</td><td class="c">640</td><td>Fair but inefficient</td></tr>
+<tr><td>SSTF</td><td class="c">236</td><td>Efficient; can starve</td></tr>
+<tr><td>SCAN</td><td class="c">331</td><td>Elevator; to the disk end</td></tr>
+<tr><td>LOOK</td><td class="c">299</td><td>SCAN without the edge trip</td></tr>
+<tr><td>C-SCAN</td><td class="c">382</td><td>Uniform waits</td></tr>
+<tr><td>C-LOOK</td><td class="c">322</td><td>C-SCAN without the edge trip</td></tr>
+</tbody>
+</table>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Forgetting to state the initial <b>direction</b> and whether the algorithm goes to the physical end
+(SCAN/C-SCAN) or only to the last request (LOOK/C-LOOK). The same queue gives different totals
+depending on both. Always write down the head's starting position <em>and</em> direction before you
+begin.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s12-3">RAID — Redundant Array of Independent Disks</h2>
+<p>RAID combines multiple physical disks into one logical unit for <b>performance</b> (spread I/O
+across disks), <b>redundancy</b> (survive disk failures), or both. The two building blocks:</p>
+<dl>
+<dt>Striping</dt><dd>Split data across disks so reads/writes happen in parallel &rarr; speed. No
+redundancy by itself.</dd>
+<dt>Mirroring / Parity</dt><dd>Store redundant information (a full copy, or parity bits) so a failed
+disk's data can be reconstructed &rarr; fault tolerance.</dd>
+</dl>
+
+<table class="avoid">
+<thead><tr><th style="width:11%">Level</th><th>Technique</th><th class="c">Min disks</th><th class="c">Fault tolerance</th><th class="c">Usable capacity</th><th>Character</th></tr></thead>
+<tbody>
+<tr><td><b>RAID 0</b></td><td>Striping, no redundancy</td><td class="c">2</td><td class="c">None</td><td class="c">100%</td><td>Max speed &amp; capacity, zero safety</td></tr>
+<tr><td><b>RAID 1</b></td><td>Mirroring (full copy)</td><td class="c">2</td><td class="c">1 disk</td><td class="c">50%</td><td>Simple redundancy, fast reads</td></tr>
+<tr><td><b>RAID 5</b></td><td>Striping + distributed parity</td><td class="c">3</td><td class="c">1 disk</td><td class="c">(N&minus;1)/N</td><td>Good balance; write penalty (parity)</td></tr>
+<tr><td><b>RAID 6</b></td><td>Striping + double parity</td><td class="c">4</td><td class="c">2 disks</td><td class="c">(N&minus;2)/N</td><td>Survives two failures; more write cost</td></tr>
+<tr><td><b>RAID 10</b></td><td>Mirror then stripe (1+0)</td><td class="c">4</td><td class="c">1 per mirror</td><td class="c">50%</td><td>Fast <em>and</em> redundant; expensive</td></tr>
+</tbody>
+</table>
+
+<figure class="diagram">
+<div class="asciiart">  RAID 0 (stripe)       RAID 1 (mirror)      RAID 5 (stripe + parity)
+  D1  D2                D1   D1'             D1   D2   P
+  A   B                 A    A               A    B    p(A,B)
+  C   D                 B    B               C    Pc   D     ← parity rotates
+  speed, no safety      safety, half cap.    1-disk safety, efficient</div>
+<figcaption>RAID 0 stripes for speed; RAID 1 mirrors for safety; RAID 5 distributes parity for efficient single-disk fault tolerance.</figcaption>
+</figure>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — how parity recovers data</div>
+RAID 5 stores <b>parity</b> = the XOR of the data blocks in a stripe. If one disk dies, its block is
+recomputed as the XOR of the survivors (X&nbsp;⊕&nbsp;parity&nbsp;=&nbsp;the missing block). That's why
+RAID 5 needs only <em>one</em> extra disk's worth of space to tolerate <em>one</em> failure. RAID 6
+adds a second, independent parity so it can lose two disks. The cost is the <b>write penalty</b>: every
+write must also update parity (read-modify-write).</div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"RAID 0 vs 1 vs 5 vs 10?" Compress it: <b>0 = speed, no safety</b>; <b>1 = safety via a full copy</b>;
+<b>5 = efficient safety via parity (survives 1)</b>; <b>6 = survives 2</b>; <b>10 = speed + safety, at
+50% capacity</b>. And the trap: <b>RAID is not a backup</b> — it protects against disk failure, not
+against deletion, corruption, ransomware, or fire. You still need real backups.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XII</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Name the three components of HDD access time and say which dominates.</li>
+      <li>Why does disk scheduling barely matter for SSDs?</li>
+      <li>How does SCAN differ from C-SCAN, and LOOK from SCAN?</li>
+      <li>Explain how RAID 5 parity reconstructs a failed disk.</li>
+      <li>Why is "RAID is not a backup" true?</li>
+    </ol>
+    <h4>Application (solve fully)</h4>
+    <ol class="tight" start="6">
+      <li>Queue <span class="kv">82, 170, 43, 140, 24, 16, 190</span>, head at 50, moving up, disk 0–199.
+      Compute total head movement for FCFS, SSTF, and C-LOOK.</li>
+      <li>You have 6 disks of 2&nbsp;TB. Give the usable capacity and failure tolerance under RAID 0, 5, 6, and 10.</li>
+      <li>A database does mostly small random writes and must survive a disk failure. RAID 5 or RAID 10? Justify.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Why does SSTF risk starvation, and how does SCAN avoid it?"</li>
+      <li>"Explain the RAID 5 write penalty and why RAID 10 avoids it."</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    HDD access-time components &middot; SSTF vs SCAN vs C-SCAN vs LOOK &middot; RAID 0/1/5/6/10 on
+    speed, safety, and capacity &middot; parity-based recovery.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On Linux, run <code>lsblk</code> to list your storage devices and <code>cat /sys/block/sda/queue/scheduler</code>
+    to see (and, as root, change) the kernel's active I/O scheduler (e.g. <code>mq-deadline</code>,
+    <code>none</code> for SSDs). Note that SSDs often use <code>none</code> — confirming scheduling
+    matters less without seeks.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> given any request queue you can compute head
+    movement for every disk-scheduling algorithm, and you can choose and justify a RAID level for a
+    given performance/safety requirement.</p>
+  </div>
+</div>

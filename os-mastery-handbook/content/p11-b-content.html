@@ -1,0 +1,185 @@
+<!-- ===================== PART XI CONTENT ===================== -->
+<h1 class="chapter" id="ch11" data-run="Inter-Process Communication"><span class="chnum">Part XI</span>Inter-Process Communication</h1>
+
+<p class="lead">A shell command like <code>ps aux | grep ssh</code> quietly relies on IPC: the output of
+one process becomes the input of another. This part covers every mechanism the OS gives isolated
+processes to exchange data — from the humble pipe to shared memory — with the trade-offs that decide
+which to use.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-1">Why IPC? The Two Families</h2>
+<p>Because each process has a private address space, they cannot simply read each other's variables.
+IPC provides deliberate, kernel-mediated channels. Every mechanism belongs to one of two families:</p>
+<dl>
+<dt>Shared memory</dt><dd>Two processes map the same physical memory region into their address spaces;
+one writes, the other reads — directly. <b>Fastest</b> (no kernel copy after setup), but the processes
+must <b>synchronize</b> access themselves (Part V) to avoid races.</dd>
+<dt>Message passing</dt><dd>Processes exchange discrete messages through the kernel
+(<code>send</code>/<code>receive</code>). <b>Simpler and safer</b> (the kernel handles synchronization
+and delivery), but slower — each message is copied through the kernel.</dd>
+</dl>
+
+<figure class="diagram">
+<div class="asciiart">   SHARED MEMORY                    MESSAGE PASSING
+   Proc A ─┐                        Proc A ──send──▶ [ kernel ] ──▶ receive ── Proc B
+           ├─▶ [shared region]      (data copied user → kernel → user)
+   Proc B ─┘   both map it
+   fast: direct read/write          safe: kernel mediates, but 2 copies
+   you must add locks               synchronization built in</div>
+<figcaption>The two IPC families: shared memory (fast, you synchronize) vs message passing (safe, kernel copies).</figcaption>
+</figure>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-2">Pipes and Named Pipes</h2>
+<p><b>Pipe.</b> A one-way, in-memory byte stream with two ends: one process writes, another reads. An
+ordinary (anonymous) pipe is created with <code>pipe()</code> and shared with a child via
+<code>fork()</code> — which is exactly how the shell wires <code>cmd1 | cmd2</code>. It's a FIFO
+(first-in-first-out) stream; the kernel buffers it and blocks the writer if it's full or the reader if
+it's empty.</p>
+
+<pre class="long"><span class="ttl">An anonymous pipe between parent and child</span><span class="kw">int</span> fd[2];                 <span class="cm">// fd[0] = read end, fd[1] = write end</span>
+pipe(fd);
+<span class="kw">if</span> (fork() == 0) {        <span class="cm">// --- child: reader ---</span>
+    close(fd[1]);            <span class="cm">// close unused write end</span>
+    <span class="kw">char</span> buf[64];
+    <span class="kw">int</span> n = read(fd[0], buf, <span class="kw">sizeof</span> buf);
+    write(1, buf, n);        <span class="cm">// echo to stdout</span>
+} <span class="kw">else</span> {                  <span class="cm">// --- parent: writer ---</span>
+    close(fd[0]);            <span class="cm">// close unused read end</span>
+    write(fd[1], <span class="st">"hello from parent\n"</span>, 18);
+    close(fd[1]);
+}</pre>
+
+<p><b>Named pipe (FIFO).</b> A pipe with a <em>name in the file system</em> (created with
+<code>mkfifo</code>), so <em>unrelated</em> processes (not just parent/child) can connect to it by
+opening the path. Otherwise it behaves like an anonymous pipe.</p>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Leaving both pipe ends open. If the writer never closes its end, the reader's <code>read()</code> never
+sees end-of-file and can hang forever. Always <code>close()</code> the ends you don't use in each
+process — the reader gets EOF only when <em>all</em> write ends are closed.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-3">Message Queues</h2>
+<p>A <span class="term">message queue</span> is a kernel-maintained linked list of discrete messages.
+Processes <code>send</code> typed/prioritized messages and <code>receive</code> them, and messages
+persist in the kernel until read (even if the sender exits). Unlike a pipe's raw byte stream, a queue
+preserves <b>message boundaries</b> and can support priorities. POSIX (<code>mq_open</code>) and older
+System&nbsp;V (<code>msgget</code>) variants exist.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-4">Shared Memory</h2>
+<p>The fastest IPC. Both processes attach the same region; after that, communication is just reading
+and writing memory — no system call per exchange, no copying. The catch: <b>you</b> must coordinate
+access with semaphores or mutexes (Part V), or you'll get races.</p>
+
+<pre class="long"><span class="ttl">POSIX shared memory (create, map, use)</span><span class="kw">int</span> fd = shm_open(<span class="st">"/myshm"</span>, O_CREAT | O_RDWR, 0666);  <span class="cm">// a named shm object</span>
+ftruncate(fd, 4096);                                   <span class="cm">// size it to one page</span>
+<span class="kw">char</span> *mem = mmap(NULL, 4096, PROT_READ | PROT_WRITE,
+                 MAP_SHARED, fd, 0);                   <span class="cm">// map into address space</span>
+
+strcpy(mem, <span class="st">"written by process A"</span>);   <span class="cm">// another process mapping /myshm sees this</span>
+<span class="cm">// ... coordinate with a semaphore so B reads only after A writes ...</span>
+munmap(mem, 4096);                          <span class="cm">// detach; shm_unlink("/myshm") to remove</span>
+</pre>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-5">Signals</h2>
+<p>A <span class="term">signal</span> is a lightweight asynchronous notification — a "software
+interrupt" delivered to a process to tell it an event happened. Signals carry no data payload beyond
+their number; they interrupt the process, which runs a registered <b>signal handler</b> or takes the
+default action (often terminate). Examples: <code>SIGINT</code> (Ctrl-C), <code>SIGKILL</code> (force
+kill, uncatchable), <code>SIGSEGV</code> (bad memory access), <code>SIGCHLD</code> (a child changed
+state — used to reap zombies, Part II).</p>
+
+<pre class="long"><span class="ttl">Catching Ctrl-C with a signal handler</span><span class="kw">#include</span> &lt;signal.h&gt;
+<span class="kw">#include</span> &lt;stdio.h&gt;
+
+<span class="kw">void</span> handler(<span class="kw">int</span> sig) {
+    printf(<span class="st">"\nCaught signal %d — cleaning up\n"</span>, sig);
+    _exit(0);
+}
+<span class="kw">int</span> main(<span class="kw">void</span>) {
+    signal(SIGINT, handler);   <span class="cm">// run handler() instead of dying on Ctrl-C</span>
+    <span class="kw">while</span> (1) pause();          <span class="cm">// sleep until a signal arrives</span>
+}</pre>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Doing complex work in a signal handler. A handler can fire at <em>any</em> instant, so calling
+non-<em>async-signal-safe</em> functions (like <code>printf</code> or <code>malloc</code>) from it can
+deadlock or corrupt state. The safe pattern is to set a <code>volatile sig_atomic_t</code> flag in the
+handler and do the real work in the main loop.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-6">Sockets</h2>
+<p>A <span class="term">socket</span> is a bidirectional communication endpoint. Its superpower: the
+<em>same</em> API works for processes on the <b>same machine</b> (UNIX-domain sockets) and across a
+<b>network</b> (TCP/UDP sockets). Because they generalize to networking, sockets are the backbone of
+all client-server software — and they get their own treatment in <b>Part XIII</b>.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-7">Remote Procedure Call (RPC)</h2>
+<p><span class="term">RPC</span> makes calling a function on a <em>remote</em> machine look like a
+local call. A client-side <b>stub</b> serializes ("marshals") the arguments into a message, sends it
+over the network, the server unmarshals and runs the real function, then returns the result the same
+way. It hides the network behind an ordinary function-call syntax — the foundation of distributed
+systems, gRPC, and microservices. (The catch: unlike a local call, an RPC can fail, time out, or run
+twice — distributed systems must plan for that.)</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s11-8">Comparing IPC Mechanisms</h2>
+<table class="avoid">
+<thead><tr><th style="width:15%">Mechanism</th><th>Direction</th><th>Speed</th><th>Related procs?</th><th>Best for</th></tr></thead>
+<tbody>
+<tr><td><b>Pipe</b></td><td>One-way</td><td>Fast</td><td>Yes (parent/child)</td><td>Streaming output to a related process (shells)</td></tr>
+<tr><td><b>Named pipe</b></td><td>One-way</td><td>Fast</td><td>No</td><td>Simple stream between unrelated processes</td></tr>
+<tr><td><b>Message queue</b></td><td>Two-way</td><td>Medium</td><td>No</td><td>Discrete, prioritized messages; loose coupling</td></tr>
+<tr><td><b>Shared memory</b></td><td>Two-way</td><td><b>Fastest</b></td><td>No</td><td>High-volume data (needs your own sync)</td></tr>
+<tr><td><b>Signal</b></td><td>One-way (event)</td><td>Fast</td><td>No</td><td>Notifications/control, not data transfer</td></tr>
+<tr><td><b>Socket</b></td><td>Two-way</td><td>Medium</td><td>No</td><td>Network or local client-server; portable</td></tr>
+</tbody>
+</table>
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Fastest IPC?" <b>Shared memory</b> — because after setup there's no kernel involvement and no copying;
+processes read/write memory directly. The trade-off you must mention: it provides <em>no</em>
+synchronization, so you pair it with semaphores/mutexes. Message passing is slower (data is copied
+through the kernel) but safer and simpler. Naming that trade-off is the whole answer.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part XI</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Contrast the shared-memory and message-passing families on speed and synchronization.</li>
+      <li>How does <code>cmd1 | cmd2</code> use pipes and <code>fork()</code>?</li>
+      <li>What does a named pipe add over an anonymous pipe?</li>
+      <li>Why is shared memory the fastest IPC, and what must you add to use it safely?</li>
+      <li>What is a signal, and why must signal handlers be minimal?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>Two unrelated processes on one machine must exchange 1&nbsp;GB of data with lowest latency.
+      Which IPC, and what extra primitive do you need?</li>
+      <li>Why might a pipe reader hang forever, and how do you prevent it?</li>
+      <li>Explain what marshaling is and one way an RPC can behave differently from a local call.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Compare shared memory and message queues — when would you pick each?"</li>
+      <li>"How would you notify a running daemon to reload its config without restarting it?" (Hint: a signal.)</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Shared memory vs message passing &middot; how pipes wire shell commands &middot; the fastest IPC and
+    its catch &middot; what a signal is and isn't.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Run <code>mkfifo /tmp/myfifo</code>. In one terminal: <code>cat /tmp/myfifo</code> (it blocks,
+    waiting). In another: <code>echo "hi over a FIFO" &gt; /tmp/myfifo</code>. Watch the message appear
+    in the first terminal — two unrelated processes just talked through a named pipe.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can pick the right IPC mechanism for a
+    given scenario and justify it on speed, direction, safety, and whether the processes are related.</p>
+  </div>
+</div>

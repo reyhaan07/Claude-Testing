@@ -1,0 +1,229 @@
+<!-- ===================== PART IX CONTENT ===================== -->
+<h1 class="chapter" id="ch9" data-run="File Systems"><span class="chnum">Part IX</span>File Systems</h1>
+
+<p class="lead">The file is the OS's most successful abstraction — so natural you forget it's an
+illusion. Underneath, the file system maps names to inodes, inodes to disk blocks, and turns a raw
+array of sectors into the durable, named, permissioned storage every program relies on.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-1">Files and Their Attributes</h2>
+<p>A <span class="term">file</span> is a named collection of related information stored on secondary
+storage — the logical unit the OS presents to users. To the OS a file is just a sequence of bytes (in
+UNIX; other systems impose record structure). Each file carries <b>metadata</b> — its attributes:</p>
+<ul class="tight">
+<li><b>Name</b> — human-readable identifier (in the directory, not the inode).</li>
+<li><b>Type</b> — regular file, directory, symlink, device, etc.</li>
+<li><b>Size</b>, <b>location</b> (which disk blocks), <b>timestamps</b> (created, modified, accessed).</li>
+<li><b>Owner &amp; permissions</b> — who may read/write/execute.</li>
+</ul>
+
+<h3>File Operations (and the system calls behind them)</h3>
+<p>The OS exposes files through a small set of operations, each backed by a system call:
+<code>create</code>, <code>open</code>, <code>read</code>, <code>write</code>, <code>seek</code>
+(move the read/write position), <code>close</code>, <code>delete</code> (<code>unlink</code>). We
+trace <code>open</code>&hellip;<code>close</code> in detail in &sect;9.7.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-2">Directories</h2>
+<p>A <span class="term">directory</span> (folder) is itself a special file whose contents are a table
+mapping <b>names &rarr; inode numbers</b>. That's the crucial insight: a directory doesn't "contain"
+files — it contains <em>names that point to inodes</em>. This is exactly why one file can have several
+names (hard links, &sect;9.6). Directories nest to form the familiar tree, rooted at <code>/</code> on
+UNIX.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-3">Inodes — the Heart of a UNIX File System</h2>
+<p><b>What is it?</b> An <span class="term">inode</span> (index node) is the on-disk data structure that
+stores <em>everything about a file except its name and its data</em>: the file's metadata plus pointers
+to the disk blocks holding its contents. Every file has exactly one inode, identified by an <b>inode
+number</b>.</p>
+
+<figure class="diagram">
+<div class="asciiart">   ┌──────────── INODE ────────────┐
+   │ type & permissions (rwx)       │
+   │ owner UID / group GID          │
+   │ size in bytes                  │        ┌──▶ [data block]
+   │ timestamps (a/m/c)             │        │
+   │ link count                     │        ├──▶ [data block]
+   │ 12 direct block pointers ──────┼────────┤
+   │ 1 single-indirect pointer ─────┼──▶[idx]─┼──▶ [data block]
+   │ 1 double-indirect pointer ─────┼──▶[idx→idx→data]  (huge files)
+   │ 1 triple-indirect pointer ─────┼──▶ ...  │
+   └────────────────────────────────┘        └──▶ [data block]
+   NOTE: the file's NAME is not here — it lives in the directory.</div>
+<figcaption>A UNIX inode: metadata plus direct and multi-level indirect block pointers. Small files use direct pointers; large files chain through indirect blocks.</figcaption>
+</figure>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+Name and content are decoupled: the <b>directory</b> holds the name&rarr;inode mapping; the <b>inode</b>
+holds metadata + block pointers; the <b>data blocks</b> hold the bytes. This three-way split explains
+hard links (many names, one inode), why renaming a file is instant (just edit a directory entry), and
+why "deleting" a file really means dropping a directory entry and decrementing the inode's link count.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-4">File Allocation Methods</h2>
+<p>How are a file's data blocks arranged on disk? Three classic strategies, each a trade-off between
+sequential-access speed, random-access speed, and fragmentation.</p>
+
+<table class="avoid">
+<thead><tr><th style="width:16%">Method</th><th>How</th><th>+ Pros</th><th>&minus; Cons</th></tr></thead>
+<tbody>
+<tr><td><b>Contiguous</b></td><td>File occupies consecutive blocks; store start + length</td><td>Fast sequential &amp; random access; simple</td><td>External fragmentation; hard to grow a file</td></tr>
+<tr><td><b>Linked</b></td><td>Each block stores a pointer to the next (a linked list on disk)</td><td>No external fragmentation; files grow easily</td><td>No random access (must walk); pointer overhead; a bad pointer loses the rest</td></tr>
+<tr><td><b>Indexed</b></td><td>An index block holds all the file's block pointers</td><td>Fast random access; no external fragmentation</td><td>Index block overhead for small files; max size limited by index size</td></tr>
+</tbody>
+</table>
+<p>The inode scheme (&sect;9.3) is <b>indexed allocation</b> made scalable: a few direct pointers for
+small files, plus single/double/triple indirect blocks so a small inode can still address a very large
+file. This is why UNIX file systems handle both tiny and huge files efficiently.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-5">Free-Space Management</h2>
+<p>The FS must track which blocks are free. Two common methods:</p>
+<ul class="tight">
+<li><b>Bitmap (bit vector)</b> — one bit per block: 1 = free, 0 = used. Easy to find contiguous runs;
+compact. Used widely.</li>
+<li><b>Free list</b> — link all free blocks together. Space-efficient but slow to find contiguous space.</li>
+</ul>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-6">Hard Links vs Symbolic (Soft) Links</h2>
+<p>Both give a file more than one name, but very differently — a classic interview distinction.</p>
+<dl>
+<dt>Hard link</dt><dd>A directory entry pointing to the <em>same inode</em> as the original. The file
+has two equal names; there's no "original." The inode's <b>link count</b> tracks how many names point
+to it; the data is freed only when the count hits 0. Cannot span file systems (inode numbers are
+per-FS) and cannot link directories.</dd>
+<dt>Symbolic (soft) link</dt><dd>A tiny special file whose <em>contents are a path</em> to another file
+— a pointer by <em>name</em>. Like a shortcut. Can cross file systems and link directories, but breaks
+if the target is moved or deleted (a "dangling" link).</dd>
+</dl>
+
+<figure class="diagram">
+<div class="asciiart">   HARD LINK                          SOFT LINK (symlink)
+   name A ─┐                          name A ──▶ inode 10 ──▶ data
+           ├─▶ inode 42 ──▶ data      symlink B ─▶ inode 77 ─▶ "path/to/A"
+   name B ─┘   (link count = 2)                          (just stores a path)
+   Delete A: data survives (B still  Delete A: B dangles (points to nothing)
+   points to inode 42, count = 1).</div>
+<figcaption>A hard link is a second name for the same inode; a symlink is a file containing a path.</figcaption>
+</figure>
+
+<table class="avoid">
+<thead><tr><th style="width:28%">&nbsp;</th><th>Hard Link</th><th>Soft Link</th></tr></thead>
+<tbody>
+<tr><td>Points to</td><td>The inode (same file)</td><td>A pathname (a name)</td></tr>
+<tr><td>Own inode?</td><td>No — shares the target's</td><td>Yes — its own tiny inode</td></tr>
+<tr><td>Cross file systems?</td><td>No</td><td>Yes</td></tr>
+<tr><td>Link to a directory?</td><td>No</td><td>Yes</td></tr>
+<tr><td>If target deleted</td><td>Data survives (count &gt; 0)</td><td>Link dangles (broken)</td></tr>
+<tr><td>Create with</td><td><code>ln A B</code></td><td><code>ln -s A B</code></td></tr>
+</tbody>
+</table>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-7">The Life of open / read / write / close</h2>
+<p>This is where files and the kernel meet, and it's a favorite "explain what happens" question. Three
+kernel tables cooperate:</p>
+<ol class="tight">
+<li><b>Per-process file descriptor table</b> — small integer FDs (0=stdin, 1=stdout, 2=stderr, then
+3,4&hellip;) map to entries in&hellip;</li>
+<li><b>System-wide open-file table</b> — one entry per <code>open()</code>, holding the current
+file <b>offset</b> and mode, pointing to&hellip;</li>
+<li><b>In-memory inode table</b> — the actual file (metadata + block pointers).</li>
+</ol>
+
+<figure class="diagram">
+<div class="asciiart">   PROCESS                 KERNEL
+   fd table            open-file table         inode table
+   ┌──────┐            ┌───────────────┐       ┌───────────┐
+   │ 0 →──┼──────────▶ │ offset, flags ┼─────▶ │  inode of │
+   │ 1 →  │            └───────────────┘       │  the file │
+   │ 2 →  │            ┌───────────────┐       │ (blocks,  │
+   │ 3 →──┼──────────▶ │ offset, flags ┼─────▶ │  perms)   │
+   └──────┘            └───────────────┘       └───────────┘</div>
+<figcaption>fd → open-file entry (offset) → inode. Two opens of one file share the inode but have separate offsets.</figcaption>
+</figure>
+
+<pre class="long"><span class="ttl">Reading a file with raw system calls</span><span class="kw">int</span> fd = open(<span class="st">"data.txt"</span>, O_RDONLY);   <span class="cm">// returns smallest free fd, e.g. 3</span>
+<span class="kw">char</span> buf[256];
+ssize_t n = read(fd, buf, <span class="kw">sizeof</span> buf);  <span class="cm">// copy up to 256 bytes; advance offset by n</span>
+<span class="cm">// ... use buf ...</span>
+close(fd);                              <span class="cm">// release the fd and open-file entry</span>
+</pre>
+<p><b>What the kernel does on <code>open</code>:</b> resolve the path (walk directories to find the
+inode), check permissions, allocate an open-file-table entry (offset 0), install a descriptor in the
+process's fd table, and return that integer. <code>read</code> uses the offset to find the right
+blocks (via the inode), copies data from the buffer cache (loading from disk on a miss), and advances
+the offset. <code>close</code> tears down the descriptor.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s9-8">Mounting, Journaling, and Consistency</h2>
+<dl>
+<dt>Mounting</dt><dd>Attaching a file system (on a disk/partition/USB) into the existing directory tree
+at a <b>mount point</b> (a directory). After <code>mount /dev/sdb1 /mnt</code>, the device's files
+appear under <code>/mnt</code>. This is how UNIX unifies many devices into one tree with no drive
+letters.</dd>
+<dt>File-system consistency</dt><dd>A crash mid-update can leave the FS inconsistent (e.g. a block
+marked used in the inode but free in the bitmap). Old systems ran a slow full scan (<code>fsck</code>)
+to repair after a crash.</dd>
+<dt>Journaling</dt><dd>The modern fix. Before modifying the FS, write the intended changes to a
+<b>journal</b> (log); then apply them. After a crash, the OS just <b>replays</b> (or discards) the
+journal — fast and safe, no full scan. ext4, NTFS, and XFS are journaling file systems.</dd>
+</dl>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — why journaling works</div>
+The danger is a crash <em>between</em> two related updates leaving the FS half-changed. Journaling makes
+the multi-step update <b>atomic-ish</b>: either the journal entry is complete (and gets replayed) or it
+isn't (and gets ignored), so the FS is never left in a torn state. It's the same write-ahead-log idea
+databases use for durability.</div>
+
+<h3>Linux File System Basics</h3>
+<p>Everything in UNIX is a file — regular files, directories, devices (<code>/dev/sda</code>), even
+kernel state (<code>/proc</code>, <code>/sys</code> — Part XIV). The <b>Virtual File System (VFS)</b>
+is a kernel abstraction layer so the same <code>open</code>/<code>read</code>/<code>write</code> calls
+work across ext4, FAT, NFS, etc. File permissions use three classes (owner, group, other) &times; three
+rights (read, write, execute), shown as <code>rwxr-xr--</code> and set with <code>chmod</code> (Part
+XIV).</p>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part IX</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>What does an inode store, and what does it deliberately <em>not</em> store?</li>
+      <li>How does a directory actually map names to files?</li>
+      <li>Compare contiguous, linked, and indexed allocation on random access and fragmentation.</li>
+      <li>Explain the three-table path from a file descriptor to the file's data.</li>
+      <li>Why does journaling make a file system crash-safe?</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>You create a hard link <code>B</code> to file <code>A</code>, then <code>rm A</code>. Can you
+      still read the data via <code>B</code>? What is the inode's link count now? What if <code>B</code>
+      had been a symlink instead?</li>
+      <li>Two processes both <code>open()</code> the same file and read. Do they share a read offset? Why or why not?</li>
+      <li>Why can't a hard link cross file systems, while a symlink can?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Walk me through exactly what the kernel does from <code>open("f")</code> to <code>read()</code> returning bytes."</li>
+      <li>"How does the inode structure let a small inode address a multi-gigabyte file?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Inode vs directory vs data block &middot; hard vs soft link &middot; the fd &rarr; open-file &rarr;
+    inode table chain &middot; why journaling prevents corruption.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    Run <code>echo hi &gt; a.txt; ln a.txt b.txt; ln -s a.txt c.txt; ls -li</code>. Compare the inode
+    numbers (first column): <code>a</code> and <code>b</code> share one; <code>c</code> has its own. Note
+    the link count. Now <code>rm a.txt</code> and try <code>cat b.txt</code> (works) vs
+    <code>cat c.txt</code> (broken symlink). You've just seen the inode model directly.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can explain the full name&rarr;inode&rarr;
+    block path, predict link-count and dangling-link behavior, and trace an <code>open/read/close</code>
+    through the kernel's three tables.</p>
+  </div>
+</div>

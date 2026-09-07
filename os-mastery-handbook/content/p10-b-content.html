@@ -1,0 +1,171 @@
+<!-- ===================== PART X CONTENT ===================== -->
+<h1 class="chapter" id="ch10" data-run="I/O Systems"><span class="chnum">Part X</span>I/O Systems</h1>
+
+<p class="lead">Computers are only useful because they talk to the outside world — disks, keyboards,
+screens, networks. But those devices are glacially slow next to the CPU. This part is about the three
+techniques the OS uses to move data to and from devices <em>without</em> letting the CPU sit idle
+waiting.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s10-1">Devices, Controllers, and Drivers</h2>
+<p>Three layers separate your program from the physical hardware:</p>
+<dl>
+<dt>Device</dt><dd>The physical hardware — disk, NIC, keyboard.</dd>
+<dt>Device controller</dt><dd>The electronics that operate the device, exposing a set of
+<b>registers</b> (data, status, command) the CPU reads/writes to control it.</dd>
+<dt>Device driver</dt><dd>Kernel software that knows a specific controller's registers and presents a
+uniform interface (<code>read</code>/<code>write</code>/<code>ioctl</code>) to the rest of the OS. The
+driver is how the OS stays device-independent: swap the disk, swap the driver, everything above is
+unchanged.</dd>
+</dl>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node u">Application &mdash; <code>read()</code></div>
+    <div class="arr">&darr;</div>
+    <div class="node">Kernel I/O subsystem (uniform interface, buffering)</div>
+    <div class="arr">&darr;</div>
+    <div class="node">Device driver (knows this controller's registers)</div>
+    <div class="arr">&darr;</div>
+    <div class="node hw">Device controller &rarr; the physical device</div>
+  </div>
+  <figcaption>The I/O stack. Each layer hides the one below; only the driver knows hardware specifics.</figcaption>
+</figure>
+
+<p><b>Talking to controller registers</b> happens two ways: <b>port-mapped I/O</b> (special
+<code>in</code>/<code>out</code> instructions and a separate I/O address space) or, more common today,
+<b>memory-mapped I/O</b> (device registers appear as ordinary memory addresses, so normal loads/stores
+control the device).</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s10-2">Three Ways to Do I/O</h2>
+<p>The central question: when a program requests slow I/O, what does the CPU do while the device works?
+The three answers are a progression from wasteful to efficient.</p>
+
+<h3>1. Polling (Programmed I/O) — Busy Waiting</h3>
+<p>The CPU repeatedly reads the controller's status register in a loop ("Are you done yet? Are you done
+yet?") until the device is ready, then transfers a word, and repeats. <b>Simple</b>, but the CPU
+<em>burns 100% of its time</em> spinning and transferring every byte itself. Fine only for very fast
+devices or the simplest systems.</p>
+
+<h3>2. Interrupt-Driven I/O</h3>
+<p>The CPU issues the I/O request and then <em>goes off to do other work</em>. When the device
+finishes, its controller raises an <b>interrupt</b> (Part I); the CPU stops, runs the driver's
+interrupt handler to transfer the data, then resumes what it was doing. <b>The CPU no longer waits</b>
+— it's interrupted only when there's actually something to do.</p>
+<p><b>The remaining cost:</b> one interrupt <em>per data unit</em>. For a disk block of thousands of
+bytes transferred a word at a time, that's still a lot of CPU involvement.</p>
+
+<h3>3. Direct Memory Access (DMA)</h3>
+<p>A dedicated <b>DMA controller</b> transfers a whole block directly between the device and RAM,
+<em>without</em> the CPU moving each byte. The CPU sets up the transfer (source, destination, count)
+and then is completely free; the DMA controller does the bulk move and raises a <b>single interrupt</b>
+when the entire block is done.</p>
+
+<figure class="diagram">
+<div class="asciiart">  POLLING            INTERRUPT-DRIVEN         DMA
+  CPU asks, waits,   CPU asks, works,         CPU sets up, works freely;
+  moves every byte   device interrupts        DMA moves the whole block;
+  itself.            per byte/word; CPU        ONE interrupt at the end.
+                     moves the data.
+  CPU: 100% busy     CPU: freed, but many     CPU: freed, ~one interrupt
+       waiting            interrupts               per block
+  ───────────────────────────────────────────────────────────────
+        worst  ─────────────────────────────▶  best CPU efficiency</div>
+<figcaption>From polling to DMA: each step removes CPU work. DMA lets the CPU ignore the transfer entirely until it completes.</figcaption>
+</figure>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — how interrupts and DMA improve performance</div>
+<b>Interrupts</b> free the CPU from <em>waiting</em> (no busy-poll) — it does useful work and is
+notified only when the device is ready. <b>DMA</b> additionally frees the CPU from <em>doing the
+transfer</em> — hardware moves the bulk data straight to RAM, and the CPU handles just one interrupt
+per block instead of one per word. Together they turn slow I/O from a CPU-monopolizing chore into a
+background activity. This is why your machine stays responsive while copying a large file.</div>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Thinking DMA eliminates interrupts. It doesn't — it eliminates the CPU <em>copying bytes</em> and
+reduces interrupts to roughly <b>one per block</b> (the "transfer complete" signal), instead of one per
+word. The CPU still gets that final interrupt to know the data has arrived.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s10-3">Buffering, Caching, and Spooling</h2>
+<p>Three techniques the kernel's I/O subsystem uses to smooth the speed mismatch and improve
+throughput. Don't confuse them:</p>
+<table class="avoid">
+<thead><tr><th style="width:16%">Technique</th><th>What it does</th><th>Why</th></tr></thead>
+<tbody>
+<tr><td><b>Buffering</b></td><td>Temporarily holds data in memory <em>between</em> producer and consumer (device and app)</td><td>Handles speed mismatch, allows different transfer sizes, and lets I/O and computation overlap</td></tr>
+<tr><td><b>Caching</b></td><td>Keeps <em>copies</em> of recently/frequently used data in fast memory</td><td>Avoids re-reading from slow storage (e.g. the page/buffer cache serves repeated file reads from RAM)</td></tr>
+<tr><td><b>Spooling</b></td><td>Queues whole jobs to a buffer (usually disk) for a device that can't interleave requests</td><td>Serializes access to a device like a printer; lets many jobs be submitted and printed in turn</td></tr>
+</tbody>
+</table>
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Buffering vs caching?" A <b>buffer</b> holds data <em>in transit</em> (the only copy, moving from A to
+B); a <b>cache</b> holds a <em>duplicate</em> of data that lives elsewhere, to serve future requests
+faster. A buffer smooths a transfer; a cache avoids a repeat. Linux's page cache is a cache; the
+staging area a driver uses to assemble a disk block is a buffer.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s10-4">Blocking, Non-Blocking, Synchronous, Asynchronous</h2>
+<p>These describe how an I/O <em>call</em> behaves from the program's point of view — endlessly muddled,
+so here they are precisely.</p>
+<dl>
+<dt>Blocking I/O</dt><dd>The call doesn't return until the I/O completes; the calling thread sleeps
+meanwhile. Simple to reason about; the default. (<code>read()</code> that waits for data.)</dd>
+<dt>Non-blocking I/O</dt><dd>The call returns immediately — either with whatever data is ready now, or
+with "nothing available yet" (<code>EAGAIN</code>). The program must poll or retry. Useful for handling
+many connections in one thread.</dd>
+<dt>Synchronous I/O</dt><dd>The program waits for the operation to finish (conceptually) before moving
+on — result is available when the call/notification completes.</dd>
+<dt>Asynchronous I/O</dt><dd>The program issues the request and continues immediately; the OS performs
+the I/O in the background and notifies the program later (callback, signal, completion event). True
+"fire and forget, tell me when done."</dd>
+</dl>
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Blocking vs non-blocking</b> is about whether the <em>call returns immediately</em>. <b>Sync vs
+async</b> is about whether the <em>work is done before you proceed</em>. High-performance servers use
+non-blocking + event notification (<code>epoll</code>, <code>kqueue</code>) or full async
+(<code>io_uring</code>) to juggle thousands of connections with a handful of threads, instead of one
+blocked thread per connection (Part XIII).</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part X</div>
+  <div class="cp-body">
+    <h4>Conceptual</h4>
+    <ol class="tight">
+      <li>Name the three I/O layers (device, controller, driver) and each one's job.</li>
+      <li>Contrast polling, interrupt-driven I/O, and DMA by CPU involvement.</li>
+      <li>Exactly how do interrupts and DMA each reduce CPU waste?</li>
+      <li>Distinguish buffering, caching, and spooling.</li>
+      <li>Separate "blocking vs non-blocking" from "synchronous vs asynchronous."</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>A driver polls a disk for a 4&nbsp;KB block one word at a time. Roughly how many status-register
+      reads and data transfers does the CPU perform? How does DMA change that?</li>
+      <li>Why does copying a large file keep your desktop responsive on a modern OS but would freeze a
+      pure-polling system?</li>
+      <li>Design the I/O model for a chat server handling 10,000 idle-mostly connections. Blocking-per-connection
+      or non-blocking + event loop? Why?</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Why is DMA essential for high-throughput devices like SSDs and NICs?"</li>
+      <li>"What happens, hardware to software, when a disk read you requested finally completes?"</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    Polling vs interrupt vs DMA and their CPU cost &middot; how DMA + interrupts free the CPU &middot;
+    buffering vs caching &middot; blocking/non-blocking vs sync/async.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On Linux, run <code>cat /proc/interrupts</code> to see interrupt counts per device (disk, NIC,
+    timer). Copy a big file and re-check — watch the disk controller's interrupt count rise. Then read
+    <code>iostat -x 1</code> during the copy to see throughput and device utilization (Part XIV).</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can explain, for any device, why the OS
+    chooses interrupt-driven DMA over polling, and correctly classify an I/O call as
+    blocking/non-blocking and sync/async.</p>
+  </div>
+</div>
