@@ -1,0 +1,203 @@
+<!-- ===================== PART XX CONTENT ===================== -->
+<h1 class="chapter" id="ch20" data-run="Comparison Tables"><span class="chnum">Part XX</span>Comparison Tables</h1>
+
+<p class="lead">One page each would be wasteful; here they are together, dense and revision-ready. Each
+table gives the distinctions that actually get asked. For the full discussion, follow the part
+reference on each.</p>
+
+<h2 class="s" id="s20-1">Core Process &amp; Execution</h2>
+
+<table class="avoid"><caption>Program vs Process &nbsp;(Part II)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Program</th><th>Process</th></tr></thead>
+<tbody>
+<tr><td>Nature</td><td>Passive, static file on disk</td><td>Active program in execution</td></tr>
+<tr><td>Resources</td><td>None</td><td>Memory, registers, PC, PID, open files</td></tr>
+<tr><td>Count</td><td>One file</td><td>Many processes from one program</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Process vs Thread &nbsp;(Part III)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Process</th><th>Thread</th></tr></thead>
+<tbody>
+<tr><td>Address space</td><td>Own, private</td><td>Shared with sibling threads</td></tr>
+<tr><td>Creation/switch cost</td><td>Heavy</td><td>Light</td></tr>
+<tr><td>Communication</td><td>Needs IPC</td><td>Shared variables (direct)</td></tr>
+<tr><td>Isolation</td><td>Strong (crash contained)</td><td>Weak (one crash can kill all)</td></tr>
+<tr><td>Shares</td><td>&mdash;</td><td>Code, data, heap, files</td></tr>
+<tr><td>Private</td><td>Everything</td><td>Stack, registers, PC</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>User Mode vs Kernel Mode &nbsp;(Part I)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>User Mode</th><th>Kernel Mode</th></tr></thead>
+<tbody>
+<tr><td>Privilege</td><td>Restricted</td><td>Full (all instructions/memory)</td></tr>
+<tr><td>Privileged instructions</td><td>Forbidden (trap if attempted)</td><td>Allowed</td></tr>
+<tr><td>Runs</td><td>Applications</td><td>Kernel</td></tr>
+<tr><td>Entered via</td><td>&mdash;</td><td>Syscall, interrupt, exception</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Process IPC vs Thread Communication &nbsp;(Parts XI, III)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Between Processes</th><th>Between Threads</th></tr></thead>
+<tbody>
+<tr><td>Default sharing</td><td>None (isolated spaces)</td><td>Shared memory by default</td></tr>
+<tr><td>How they talk</td><td>Pipes, shared memory, sockets, signals</td><td>Shared variables + locks</td></tr>
+<tr><td>Cost</td><td>Higher (kernel involvement/copy)</td><td>Lower (direct memory)</td></tr>
+<tr><td>Safety</td><td>Isolated; a crash is contained</td><td>A bad write corrupts all</td></tr>
+</tbody></table>
+
+<h2 class="s" id="s20-2">Concurrency &amp; Synchronization</h2>
+
+<table class="avoid"><caption>Concurrency vs Parallelism &nbsp;(Part III)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Concurrency</th><th>Parallelism</th></tr></thead>
+<tbody>
+<tr><td>Meaning</td><td>Dealing with many tasks (overlapping time)</td><td>Doing many tasks at the same instant</td></tr>
+<tr><td>About</td><td>Structure</td><td>Execution</td></tr>
+<tr><td>Cores needed</td><td>Works on one core (interleaving)</td><td>Requires multiple cores</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Mutex vs Semaphore &nbsp;(Part V)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Mutex</th><th>Semaphore</th></tr></thead>
+<tbody>
+<tr><td>Type</td><td>Locking mechanism</td><td>Signaling mechanism (counter)</td></tr>
+<tr><td>Ownership</td><td>Yes — locker must unlock</td><td>No — any thread can signal</td></tr>
+<tr><td>Value</td><td>Locked / unlocked</td><td>Integer (0..N)</td></tr>
+<tr><td>Use</td><td>Mutual exclusion (protect data)</td><td>Count resources / order threads</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Binary vs Counting Semaphore &nbsp;(Part V)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Binary</th><th>Counting</th></tr></thead>
+<tbody>
+<tr><td>Range</td><td>0 or 1</td><td>0 .. N</td></tr>
+<tr><td>Represents</td><td>One resource / mutual exclusion</td><td>N identical resources</td></tr>
+<tr><td>Example</td><td>Guard a critical section</td><td>5 DB connections available</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Busy Waiting (Spinlock) vs Blocking (Mutex) &nbsp;(Part V)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Spinlock (busy wait)</th><th>Mutex (blocking)</th></tr></thead>
+<tbody>
+<tr><td>While waiting</td><td>Spins, uses CPU</td><td>Sleeps, frees CPU</td></tr>
+<tr><td>Cost</td><td>Wasted cycles</td><td>Two context switches</td></tr>
+<tr><td>Best for</td><td>Very short waits, multicore</td><td>Long/unpredictable waits</td></tr>
+<tr><td>Single core</td><td>Disastrous</td><td>Correct</td></tr>
+</tbody></table>
+
+<h2 class="s" id="s20-3">Deadlock Family</h2>
+
+<table class="avoid"><caption>Deadlock vs Starvation vs Livelock &nbsp;(Part VI)</caption>
+<thead><tr><th style="width:16%">&nbsp;</th><th>Deadlock</th><th>Starvation</th><th>Livelock</th></tr></thead>
+<tbody>
+<tr><td>State</td><td>All blocked forever</td><td>One waits indefinitely</td><td>Busy but no progress</td></tr>
+<tr><td>Running?</td><td>No</td><td>Others do</td><td>Yes, uselessly</td></tr>
+<tr><td>Cause</td><td>4 Coffman conditions</td><td>Unfair policy</td><td>Overly polite retries</td></tr>
+<tr><td>Fix</td><td>Break a condition</td><td>Aging</td><td>Randomized backoff</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Preemptive vs Non-Preemptive Scheduling &nbsp;(Part IV)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Non-Preemptive</th><th>Preemptive</th></tr></thead>
+<tbody>
+<tr><td>CPU taken away?</td><td>No — runs to finish/block</td><td>Yes — can be forced off</td></tr>
+<tr><td>Trigger</td><td>Exit or I/O</td><td>Timer / higher priority</td></tr>
+<tr><td>Responsiveness</td><td>Poorer</td><td>Better</td></tr>
+<tr><td>Examples</td><td>FCFS, SJF</td><td>SRTF, RR, preemptive priority</td></tr>
+</tbody></table>
+
+<h2 class="s" id="s20-4">Memory</h2>
+
+<table class="avoid"><caption>Paging vs Segmentation &nbsp;(Part VII)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Paging</th><th>Segmentation</th></tr></thead>
+<tbody>
+<tr><td>Unit</td><td>Fixed-size page</td><td>Variable-size logical segment</td></tr>
+<tr><td>Fragmentation</td><td>Internal</td><td>External</td></tr>
+<tr><td>Visible to programmer</td><td>No</td><td>Yes</td></tr>
+<tr><td>Address</td><td>(page #, offset)</td><td>(segment #, offset)</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Virtual vs Physical Memory &nbsp;(Parts VII–VIII)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Virtual (Logical)</th><th>Physical</th></tr></thead>
+<tbody>
+<tr><td>What</td><td>Address a program uses</td><td>Real RAM location</td></tr>
+<tr><td>Size</td><td>Can exceed RAM (backed by disk)</td><td>Limited by installed RAM</td></tr>
+<tr><td>Per process</td><td>Private space each</td><td>One, shared by all</td></tr>
+<tr><td>Translated by</td><td>&mdash;</td><td>MMU (from virtual)</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Internal vs External Fragmentation &nbsp;(Part VII)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Internal</th><th>External</th></tr></thead>
+<tbody>
+<tr><td>Where</td><td>Wasted space inside an allocated block</td><td>Free space scattered in unusable holes</td></tr>
+<tr><td>Cause</td><td>Fixed-size allocation</td><td>Variable allocation over time</td></tr>
+<tr><td>Cured by</td><td>Smaller/variable blocks</td><td>Compaction; paging</td></tr>
+</tbody></table>
+
+<h2 class="s" id="s20-5">Storage, I/O &amp; File System</h2>
+
+<table class="avoid"><caption>HDD vs SSD &nbsp;(Part XII)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>HDD</th><th>SSD</th></tr></thead>
+<tbody>
+<tr><td>Mechanism</td><td>Spinning platters + moving head</td><td>Flash, no moving parts</td></tr>
+<tr><td>Seek time</td><td>Yes (dominates)</td><td>None</td></tr>
+<tr><td>Random access</td><td>Slow (~ms)</td><td>Very fast (~µs)</td></tr>
+<tr><td>Cost/GB</td><td>Cheap</td><td>Higher</td></tr>
+<tr><td>Scheduling matters?</td><td>Yes</td><td>Little</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Polling vs Interrupt vs DMA &nbsp;(Part X)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Polling</th><th>Interrupt-driven</th><th>DMA</th></tr></thead>
+<tbody>
+<tr><td>CPU while waiting</td><td>Busy-waits</td><td>Free (works elsewhere)</td><td>Free</td></tr>
+<tr><td>Data transfer</td><td>CPU, byte by byte</td><td>CPU, per interrupt</td><td>Hardware, whole block</td></tr>
+<tr><td>Interrupts</td><td>None</td><td>Per byte/word</td><td>~One per block</td></tr>
+<tr><td>Efficiency</td><td>Worst</td><td>Better</td><td>Best</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Buffering vs Caching &nbsp;(Part X)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Buffering</th><th>Caching</th></tr></thead>
+<tbody>
+<tr><td>Holds</td><td>Data in transit (the only copy)</td><td>A duplicate of data stored elsewhere</td></tr>
+<tr><td>Purpose</td><td>Smooth a speed/size mismatch</td><td>Avoid re-fetching (speed repeats)</td></tr>
+<tr><td>Example</td><td>Driver assembling a disk block</td><td>Page cache serving repeated reads</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>Hard Link vs Soft (Symbolic) Link &nbsp;(Part IX)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Hard Link</th><th>Soft Link</th></tr></thead>
+<tbody>
+<tr><td>Points to</td><td>The same inode</td><td>A pathname (a name)</td></tr>
+<tr><td>Cross file systems</td><td>No</td><td>Yes</td></tr>
+<tr><td>Link a directory</td><td>No</td><td>Yes</td></tr>
+<tr><td>Target deleted</td><td>Data survives</td><td>Link dangles</td></tr>
+</tbody></table>
+
+<h2 class="s" id="s20-6">Architecture &amp; RAID</h2>
+
+<table class="avoid"><caption>Monolithic vs Microkernel &nbsp;(Part I)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Monolithic</th><th>Microkernel</th></tr></thead>
+<tbody>
+<tr><td>Services run in</td><td>Kernel space</td><td>User space (servers)</td></tr>
+<tr><td>Speed</td><td>Faster</td><td>Slower (message passing)</td></tr>
+<tr><td>Fault isolation</td><td>Poor (driver can crash kernel)</td><td>Excellent (restart a server)</td></tr>
+<tr><td>Examples</td><td>Linux, classic UNIX</td><td>QNX, seL4, Minix</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>VM vs Container &nbsp;(Part XV)</caption>
+<thead><tr><th style="width:20%">Aspect</th><th>Virtual Machine</th><th>Container</th></tr></thead>
+<tbody>
+<tr><td>Virtualizes</td><td>Hardware (own guest kernel)</td><td>OS (shares host kernel)</td></tr>
+<tr><td>Isolation</td><td>Strong</td><td>Weaker (shared kernel)</td></tr>
+<tr><td>Weight / startup</td><td>Heavy / seconds</td><td>Light / milliseconds</td></tr>
+<tr><td>Isolated by</td><td>Hypervisor</td><td>Namespaces + cgroups</td></tr>
+</tbody></table>
+
+<table class="avoid"><caption>RAID 0 vs 1 vs 5 vs 6 vs 10 &nbsp;(Part XII)</caption>
+<thead><tr><th style="width:12%">Level</th><th>Technique</th><th class="c">Min disks</th><th class="c">Tolerates</th><th class="c">Usable</th><th>Best for</th></tr></thead>
+<tbody>
+<tr><td>RAID 0</td><td>Striping</td><td class="c">2</td><td class="c">0</td><td class="c">100%</td><td>Max speed, scratch data</td></tr>
+<tr><td>RAID 1</td><td>Mirroring</td><td class="c">2</td><td class="c">1</td><td class="c">50%</td><td>Simple redundancy</td></tr>
+<tr><td>RAID 5</td><td>Stripe + parity</td><td class="c">3</td><td class="c">1</td><td class="c">(N&minus;1)/N</td><td>Balanced read-heavy</td></tr>
+<tr><td>RAID 6</td><td>Stripe + double parity</td><td class="c">4</td><td class="c">2</td><td class="c">(N&minus;2)/N</td><td>Large arrays, safety</td></tr>
+<tr><td>RAID 10</td><td>Mirror + stripe</td><td class="c">4</td><td class="c">1/mirror</td><td class="c">50%</td><td>Fast + safe databases</td></tr>
+</tbody></table>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Revision Tip</div>
+For each pair, memorize <em>one</em> discriminating sentence — the row that truly separates them:
+"mutex has an owner, semaphore doesn't"; "paging = internal fragmentation, segmentation = external";
+"a hard link shares the inode, a symlink stores a path"; "concurrency is structure, parallelism is
+execution." Lead with that line, then expand only if pressed.</div>

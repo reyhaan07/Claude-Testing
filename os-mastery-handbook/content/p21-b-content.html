@@ -1,0 +1,142 @@
+<!-- ===================== PART XXI CONTENT ===================== -->
+<h1 class="chapter" id="ch21" data-run="Visual Learning Index"><span class="chnum">Part XXI</span>Visual Learning Index</h1>
+
+<p class="lead">If you can redraw these master diagrams from memory, you understand how the pieces of an
+operating system fit together. Practice each on a blank page — that act of reconstruction is where real
+understanding lives.</p>
+
+<!-- ================= MASTER 1 ================= -->
+<h2 class="s" id="s21-1">The Map of the Operating System</h2>
+<p>One picture placing every subsystem in this book relative to the user/kernel line.</p>
+<figure class="diagram">
+<div class="asciiart">  ┌──────────────────────── USER SPACE ────────────────────────────┐
+  │  Applications   Shells   Daemons   Libraries (libc)             │
+  └───────────────────────────┬─────────────────────────────────────┘
+                    system call boundary  (Part I)
+  ┌───────────────────────────┴─────────────────────────────────────┐
+  │  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  KERNEL  ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓  │
+  │  Process mgmt      Scheduler        Memory mgmt / VM             │
+  │  (II, III)         (IV)             (VII, VIII)                  │
+  │  Sync & IPC        File systems     I/O subsystem  Network stack │
+  │  (V, VI, XI)       (IX)             (X)            (XIII)        │
+  │  Device drivers ───────────────────────────────────────────────│
+  └───────────────────────────┬─────────────────────────────────────┘
+  ┌───────────────────────────┴─────────────────────────────────────┐
+  │  HARDWARE:  CPU + MMU/TLB    RAM    Disk/SSD    NIC    Devices    │
+  └──────────────────────────────────────────────────────────────────┘</div>
+<figcaption>The whole OS on one page. Everything you learned lives in one of these boxes; the syscall boundary is the line every request crosses.</figcaption>
+</figure>
+
+<!-- ================= MASTER 2 ================= -->
+<h2 class="s" id="s21-2">The Memory Hierarchy</h2>
+<p>Why caches, the TLB, virtual memory, and the page cache all exist: each level trades speed for size,
+and the OS shuttles data between them.</p>
+<figure class="diagram">
+<div class="asciiart">        faster, smaller, costlier
+        ▲   ┌───────────────┐
+        │   │  CPU registers │   &lt;1 ns      (Part II)
+        │   ├───────────────┤
+        │   │  L1/L2/L3 cache│   ~1–10 ns
+        │   ├───────────────┤
+        │   │  Main memory   │   ~100 ns    (Parts VII–VIII)
+        │   │  (RAM)         │              ← TLB caches translations here
+        │   ├───────────────┤
+        │   │  SSD           │   ~10–100 µs (Part XII)
+        │   ├───────────────┤
+        │   │  HDD           │   ~5–10 ms   ← page faults reach here
+        │   └───────────────┘
+        │   larger, slower, cheaper
+        ▼</div>
+<figcaption>The memory hierarchy. Locality (Part VIII) is what makes the fast, small upper levels catch almost every access.</figcaption>
+</figure>
+
+<!-- ================= MASTER 3 ================= -->
+<h2 class="s" id="s21-3">The Complete Address-Translation Path</h2>
+<p>The full journey of a single memory reference, combining the TLB, page table, and page fault into
+one picture (Parts VII–VIII).</p>
+<figure class="diagram">
+<div class="asciiart">   CPU emits virtual address
+        │
+        ▼
+   ┌─────────┐  hit   ┌────────────────────────────────┐
+   │  TLB    ├───────▶│ frame # → physical address → RAM │  (fast path)
+   └────┬────┘        └────────────────────────────────┘
+        │ miss
+        ▼
+   ┌───────────────┐  present   ┌──────────────────┐
+   │  Page table   ├───────────▶│ load TLB → RAM    │
+   │  (walk it)    │            └──────────────────┘
+   └────┬──────────┘
+        │ NOT present
+        ▼
+   ┌───────────────┐   ┌──────────┐   ┌──────────────┐   ┌──────────────┐
+   │  PAGE FAULT   ├──▶│ OS finds │──▶│ load page    │──▶│ update table │──▶ restart
+   │  (trap to OS) │   │ a frame  │   │ from disk    │   │ + present bit│    instruction
+   └───────────────┘   └──────────┘   └──────────────┘   └──────────────┘</div>
+<figcaption>Every memory access, start to finish: TLB → page table → (maybe) page fault → RAM. Memorize this — it answers a dozen interview questions.</figcaption>
+</figure>
+
+<!-- ================= MASTER 4 ================= -->
+<h2 class="s" id="s21-4">The Process Lifecycle at a Glance</h2>
+<figure class="diagram">
+<div class="asciiart">   fork()          admitted        dispatch
+   ────▶ NEW ───────────▶ READY ───────────────▶ RUNNING ──exit()──▶ TERMINATED
+                           ▲                        │  │                  │
+              wakeup       │      preempt (timer)   │  │ block (I/O)       │ reaped
+              (event done) │◀───────────────────────┘  ▼                  ▼  by wait()
+                           └──────── WAITING ◀──────────┘              (PCB freed)
+                                     on wait queue
+   States: Part II · transitions driven by scheduler (IV), I/O (X), signals (XI)</div>
+<figcaption>The five-state model with the events that drive every transition — the backbone of Parts II and IV.</figcaption>
+</figure>
+
+<!-- ================= DIAGRAM INDEX ================= -->
+<h2 class="s" id="s21-5">Index of Every Key Diagram</h2>
+<p>Where to find each important diagram for targeted revision:</p>
+<div class="two-col">
+<table class="avoid">
+<thead><tr><th>Diagram</th><th class="c">Part</th></tr></thead>
+<tbody>
+<tr><td>App &rarr; Library &rarr; Syscall &rarr; Kernel &rarr; HW</td><td class="c">I</td></tr>
+<tr><td>User/kernel dual-mode operation</td><td class="c">I</td></tr>
+<tr><td>Monolithic vs microkernel</td><td class="c">I</td></tr>
+<tr><td>Boot process flow</td><td class="c">I</td></tr>
+<tr><td>Process address space (segments)</td><td class="c">II</td></tr>
+<tr><td>The PCB</td><td class="c">II</td></tr>
+<tr><td>Five-state process diagram</td><td class="c">II</td></tr>
+<tr><td>fork &rarr; exec &rarr; wait lifecycle</td><td class="c">II</td></tr>
+<tr><td>Context switch</td><td class="c">II</td></tr>
+<tr><td>Thread shared vs private memory</td><td class="c">III</td></tr>
+<tr><td>Threading models (1:1, N:1, M:N)</td><td class="c">III</td></tr>
+<tr><td>Concurrency vs parallelism</td><td class="c">III</td></tr>
+<tr><td>Gantt charts (all algorithms)</td><td class="c">IV</td></tr>
+<tr><td>Critical section structure</td><td class="c">V</td></tr>
+<tr><td>Dining philosophers table</td><td class="c">V</td></tr>
+</tbody>
+</table>
+<table class="avoid">
+<thead><tr><th>Diagram</th><th class="c">Part</th></tr></thead>
+<tbody>
+<tr><td>Two-lock deadlock</td><td class="c">VI</td></tr>
+<tr><td>Resource-allocation graph</td><td class="c">VI</td></tr>
+<tr><td>Safe/unsafe/deadlock regions</td><td class="c">VI</td></tr>
+<tr><td>Paged address translation</td><td class="c">VII</td></tr>
+<tr><td>Multi-level page table</td><td class="c">VII</td></tr>
+<tr><td>MMU in the memory path</td><td class="c">VII</td></tr>
+<tr><td>Page-fault handling flow</td><td class="c">VIII</td></tr>
+<tr><td>Thrashing curve</td><td class="c">VIII</td></tr>
+<tr><td>Copy-on-write</td><td class="c">VIII</td></tr>
+<tr><td>Inode structure</td><td class="c">IX</td></tr>
+<tr><td>fd &rarr; open-file &rarr; inode tables</td><td class="c">IX</td></tr>
+<tr><td>Hard vs soft link</td><td class="c">IX</td></tr>
+<tr><td>Polling vs interrupt vs DMA</td><td class="c">X</td></tr>
+<tr><td>IPC families; RAID layouts</td><td class="c">XI, XII</td></tr>
+<tr><td>Network stack; VM vs container</td><td class="c">XIII, XV</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Whiteboard Tip</div>
+In a systems interview you <em>will</em> be asked to draw. The four master diagrams here — the OS map,
+the memory hierarchy, address translation, and the process lifecycle — cover the vast majority of
+"draw me…" prompts. Practice each until you can produce it in under a minute while talking.</div>

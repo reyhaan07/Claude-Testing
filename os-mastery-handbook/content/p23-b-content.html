@@ -1,0 +1,255 @@
+<!-- ===================== PART XXIII CONTENT ===================== -->
+<h1 class="chapter" id="ch23" data-run="Final Revision &amp; Mastery Test"><span class="chnum">Part XXIII</span>Final Revision &amp; Mastery Test</h1>
+
+<p class="lead">Everything, compressed. If you have worked through this book, this chapter is your final
+sweep and your proof. Read the cheat sheet and traps, take the mastery test under exam conditions, and
+finish with the checklist that lets you say the words: I have mastered operating systems.</p>
+
+<!-- ================= CHEAT SHEET ================= -->
+<h2 class="s" id="s23-1">One-Page OS Cheat Sheet</h2>
+<div class="box concept" style="font-size:9.4pt;"><div class="box-title"><span class="ic">&#9635;</span>The Whole Book in One Box</div>
+<b>OS</b> = resource manager + extended machine. <b>Kernel</b> runs privileged; apps run restricted;
+cross via <b>syscall / interrupt / exception</b>.<br>
+<b>Process</b> = program in execution (own address space, PCB). <b>Thread</b> = flow inside a process
+(shares code/data/heap; own stack/regs/PC).<br>
+<b>States:</b> New&rarr;Ready&rarr;Running&rarr;(Waiting)&rarr;Terminated. <b>fork</b>=copy (COW),
+<b>exec</b>=replace image, <b>wait</b>=reap.<br>
+<b>Scheduling:</b> FCFS (convoy), SJF/SRTF (optimal WT, starves), RR (response/fairness, quantum),
+Priority (+aging), MLFQ (adaptive).<br>
+<b>Sync:</b> mutex (owned) / semaphore (counter, signaling); protect the <b>critical section</b>;
+producer&ndash;consumer = empty/full + mutex.<br>
+<b>Deadlock:</b> mutual exclusion + hold-and-wait + no-preemption + circular-wait; break one (lock
+ordering). Banker's = avoidance.<br>
+<b>Memory:</b> virtual&rarr;physical via <b>MMU</b>; page+offset; <b>TLB</b> caches translations;
+multi-level page tables save space.<br>
+<b>Virtual memory:</b> demand paging; <b>page fault</b> loads from disk; replace with FIFO/LRU/Optimal;
+too much paging = <b>thrashing</b>.<br>
+<b>Files:</b> directory(name)&rarr;<b>inode</b>(metadata+blocks)&rarr;data; hard link shares inode,
+symlink stores a path; journaling = crash-safe.<br>
+<b>I/O:</b> polling &lt; interrupt &lt; <b>DMA</b>; buffer (in transit) vs cache (duplicate).
+<b>IPC:</b> shared memory (fast, sync yourself) vs message passing (safe).<br>
+<b>Disk:</b> FCFS/SSTF/SCAN/C-SCAN/LOOK/C-LOOK; <b>RAID</b> 0=speed,1=mirror,5=parity(1),6=(2),10=both.
+<b>Net:</b> socket=fd; TCP reliable/stream, UDP fast/datagram; epoll scales.</div>
+
+<!-- ================= FORMULAS ================= -->
+<h2 class="s" id="s23-2">Important Formulas</h2>
+<table class="avoid">
+<thead><tr><th style="width:34%">Quantity</th><th>Formula</th></tr></thead>
+<tbody>
+<tr><td>Turnaround Time</td><td class="mono">TAT = Completion &minus; Arrival</td></tr>
+<tr><td>Waiting Time</td><td class="mono">WT = TAT &minus; Burst</td></tr>
+<tr><td>Response Time</td><td class="mono">RT = First-CPU &minus; Arrival</td></tr>
+<tr><td>Average (any metric)</td><td class="mono">sum over processes / n</td></tr>
+<tr><td>Physical address (paging)</td><td class="mono">frame &times; page_size + offset</td></tr>
+<tr><td>Page number / offset</td><td class="mono">page = addr / page_size; offset = addr mod page_size</td></tr>
+<tr><td>Page-table entries (1-level)</td><td class="mono">2^(address_bits &minus; offset_bits)</td></tr>
+<tr><td>Effective Access Time (TLB)</td><td class="mono">h&times;(TLB+mem) + (1&minus;h)&times;(TLB+2&times;mem)</td></tr>
+<tr><td>EAT (demand paging)</td><td class="mono">(1&minus;p)&times;mem + p&times;fault_time</td></tr>
+<tr><td>Hit ratio</td><td class="mono">hits / (hits + misses)</td></tr>
+<tr><td>Disk access time (HDD)</td><td class="mono">seek + rotational_latency + transfer</td></tr>
+<tr><td>Speedup (Amdahl)</td><td class="mono">1 / ( (1&minus;P) + P/N )</td></tr>
+</tbody>
+</table>
+
+<!-- ================= DEFINITIONS ================= -->
+<h2 class="s" id="s23-3">Key Definitions (Rapid Recall)</h2>
+<div class="two-col small">
+<p><b>Kernel:</b> privileged core of the OS.
+<b>System call:</b> controlled kernel entry for a service.
+<b>Process:</b> program in execution with its own address space.
+<b>Thread:</b> schedulable flow sharing a process's memory.
+<b>PCB:</b> kernel record of a process's full state.
+<b>Context switch:</b> save one process's state, restore another's.
+<b>Critical section:</b> code touching shared data, one thread at a time.
+<b>Race condition:</b> outcome depends on thread timing.
+<b>Mutex:</b> owned lock for mutual exclusion.
+<b>Semaphore:</b> counter with atomic wait/signal.
+<b>Deadlock:</b> circular wait, all blocked forever.
+<b>Starvation:</b> a process indefinitely denied service.
+<b>Livelock:</b> busy but no progress.</p>
+<p><b>Virtual memory:</b> illusion of large private memory backed by disk.
+<b>Page fault:</b> referenced page not in RAM.
+<b>TLB:</b> cache of recent address translations.
+<b>Thrashing:</b> more time paging than executing.
+<b>Working set:</b> pages a process uses recently.
+<b>Locality:</b> tendency to reuse nearby/recent data.
+<b>Inode:</b> file metadata + block pointers (no name).
+<b>DMA:</b> device&harr;RAM transfer without the CPU.
+<b>Copy-on-write:</b> share pages until a write copies one.
+<b>Spinlock:</b> lock that busy-waits.
+<b>Daemon:</b> background service, no terminal.
+<b>Zombie:</b> dead process not yet reaped.
+<b>Orphan:</b> running process whose parent died.</p>
+</div>
+
+<!-- ================= TRAPS ================= -->
+<h2 class="s" id="s23-4">Common Interview Traps</h2>
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>The Misconceptions That Cost Offers</div>
+<ol class="tight" style="margin-bottom:0;">
+<li><b>"malloc is a system call."</b> No — a library allocator; only sometimes calls <code>brk</code>/<code>mmap</code>.</li>
+<li><b>"A binary semaphore is a mutex."</b> No — a mutex has ownership; a semaphore doesn't.</li>
+<li><b>"You can kill a zombie."</b> No — it's already dead; reap it (or kill the parent).</li>
+<li><b>"Waiting goes straight to Running."</b> No — it goes to Ready, then must be scheduled.</li>
+<li><b>"A program switches itself to kernel mode."</b> No — only via syscall/interrupt/exception.</li>
+<li><b>"More frames always means fewer faults."</b> Not for FIFO — Belady's anomaly.</li>
+<li><b>"A RAG cycle always means deadlock."</b> Only with single-instance resources.</li>
+<li><b>"Threads have their own heap."</b> No — the heap is shared; only the stack is per-thread.</li>
+<li><b>"Low free RAM is bad."</b> No — it's page cache; watch <em>available</em>.</li>
+<li><b>"DMA eliminates interrupts."</b> No — it reduces them to ~one per block.</li>
+<li><b>"TCP preserves message boundaries."</b> No — it's a byte stream; delimit yourself.</li>
+<li><b>"RAID is a backup."</b> No — it survives disk failure, not deletion/corruption.</li>
+<li><b>"Optimal page replacement is usable."</b> No — it needs the future; it's a benchmark only.</li>
+<li><b>"Spinlocks are always fast."</b> No — disastrous on a single core / long holds.</li>
+<li><b>"exec creates a new process."</b> No — it replaces the current one (same PID); <code>fork</code> creates.</li>
+</ol></div>
+
+<!-- ================= RAPID FIRE ================= -->
+<h2 class="s" id="s23-5">Rapid-Fire: The Questions You Must Nail</h2>
+<p>Full answers are in Part XVIII. If any of these gives you pause, revisit that answer now.</p>
+<div class="two-col small">
+<ol class="tight">
+<li>What is an OS? A kernel?</li>
+<li>User vs kernel mode?</li>
+<li>API vs system call? Why are syscalls expensive?</li>
+<li>Program vs process vs thread?</li>
+<li>What's in a PCB?</li>
+<li>The five process states + transitions?</li>
+<li>What does <code>fork</code> return, and why twice?</li>
+<li>fork vs exec?</li>
+<li>Zombie vs orphan vs daemon?</li>
+<li>Why does context switching cost?</li>
+<li>Concurrency vs parallelism?</li>
+<li>What shared/private between threads?</li>
+<li>What is a race condition? Critical section?</li>
+<li>Mutex vs semaphore? Binary sem vs mutex?</li>
+<li>Spinlock vs mutex?</li>
+<li>FCFS/SJF/SRTF/RR trade-offs?</li>
+<li>Convoy effect? Starvation? Aging?</li>
+<li>Four Coffman conditions?</li>
+<li>How to prevent deadlock in code?</li>
+<li>Safe vs unsafe state?</li>
+</ol>
+<ol class="tight" start="21">
+<li>Deadlock vs livelock vs starvation?</li>
+<li>Virtual vs physical address? The MMU?</li>
+<li>How does address translation work?</li>
+<li>What is the TLB? EAT?</li>
+<li>Internal vs external fragmentation?</li>
+<li>Paging vs segmentation?</li>
+<li>What is a page fault (and its handling)?</li>
+<li>FIFO vs LRU vs Optimal? Belady?</li>
+<li>Thrashing and its fix?</li>
+<li>What is copy-on-write?</li>
+<li>Inode? Hard vs soft link?</li>
+<li>Polling vs interrupt vs DMA?</li>
+<li>Buffering vs caching?</li>
+<li>Fastest IPC and its catch?</li>
+<li>Disk scheduling algorithms?</li>
+<li>RAID 0/1/5/6/10?</li>
+<li>TCP vs UDP?</li>
+<li>How to serve 100k connections?</li>
+<li>VM vs container?</li>
+<li>What happens when you run a program?</li>
+</ol>
+</div>
+
+<!-- ================= REVISION CHECKLIST ================= -->
+<h2 class="s" id="s23-6">OS Revision Checklist</h2>
+<table class="avoid">
+<thead><tr><th style="width:6%" class="c">✓</th><th>Before you sit any OS exam or interview, confirm you can&hellip;</th></tr></thead>
+<tbody>
+<tr><td class="c">&#9633;</td><td>Draw the syscall stack and the process state diagram from memory.</td></tr>
+<tr><td class="c">&#9633;</td><td>Solve a scheduling problem (Gantt + WT/TAT/RT) for all five algorithms.</td></tr>
+<tr><td class="c">&#9633;</td><td>Write and explain a producer&ndash;consumer / mutex solution.</td></tr>
+<tr><td class="c">&#9633;</td><td>Run the Banker's Algorithm and decide safety.</td></tr>
+<tr><td class="c">&#9633;</td><td>Translate a logical address and compute EAT with a TLB.</td></tr>
+<tr><td class="c">&#9633;</td><td>Trace FIFO/LRU/Optimal on a reference string and show Belady's anomaly.</td></tr>
+<tr><td class="c">&#9633;</td><td>Explain the inode model and link behavior.</td></tr>
+<tr><td class="c">&#9633;</td><td>Compute disk head movement for all six algorithms.</td></tr>
+<tr><td class="c">&#9633;</td><td>Compare RAID levels and TCP vs UDP.</td></tr>
+<tr><td class="c">&#9633;</td><td>Narrate three "what happens when…" flows end to end.</td></tr>
+<tr><td class="c">&#9633;</td><td>Recite the 15 common traps without hesitation.</td></tr>
+</tbody>
+</table>
+
+<!-- ================= FINAL TEST ================= -->
+<h2 class="s" id="s23-7">Final Mastery Test</h2>
+<p>Give yourself 90 minutes, no notes. Aim for 80%+. Answers are throughout the book (part references
+in brackets).</p>
+
+<div class="checkpoint">
+<div class="cp-head">Final Mastery Test — 25 Questions</div>
+<div class="cp-body">
+<h4>Section A — Concepts (short answer)</h4>
+<ol class="tight">
+<li>Explain the two fundamental jobs of an OS with an example of each. [I]</li>
+<li>What are the only three ways to enter kernel mode, and what triggers each? [I]</li>
+<li>Exactly what does a context switch save and restore, and where are its two costs? [II]</li>
+<li>List what threads share and keep private, and why sharing enables races. [III]</li>
+<li>Define the three requirements of a correct critical-section solution. [V]</li>
+<li>State the four Coffman conditions and one way to break each. [VI]</li>
+<li>Distinguish internal and external fragmentation; which does paging cure? [VII]</li>
+<li>Describe the full page-fault handling sequence. [VIII]</li>
+<li>Explain hard vs soft links and what happens when the target is deleted. [IX]</li>
+<li>Why do interrupts and DMA each reduce CPU waste? [X]</li>
+</ol>
+<h4>Section B — Numericals (show all steps)</h4>
+<ol class="tight" start="11">
+<li>P1(0,5) P2(1,4) P3(2,2) P4(3,1): average WT for FCFS and SRTF. Which wins? [IV, XIX]</li>
+<li>Round Robin q=2 on the same set: Gantt chart and average response time. [IV, XIX]</li>
+<li>Page size 2&nbsp;KB, page 4 &rarr; frame 9: translate logical address 9000. [VII, XIX]</li>
+<li>TLB 15&nbsp;ns, memory 90&nbsp;ns, hit ratio 90%: effective access time. [VII, XIX]</li>
+<li>Reference string <span class="kv">1 2 3 4 1 2 5 1 2 3 4 5</span>, 3 frames: faults under FIFO, LRU, Optimal. [VIII]</li>
+<li>Given a Banker's snapshot (make one from &sect;19.3's style): find a safe sequence or prove none. [VI, XIX]</li>
+<li>Queue <span class="kv">55, 58, 39, 18, 90, 160, 150, 38, 184</span>, head 100, up: total movement for SSTF and C-LOOK. [XII, XIX]</li>
+</ol>
+<h4>Section C — Systems reasoning (explain)</h4>
+<ol class="tight" start="18">
+<li>Walk through everything that happens when a shell runs <code>grep foo file.txt</code>. [XVI]</li>
+<li>Explain, step by step, what happens on a page fault, in hardware and software. [VIII, XVI]</li>
+<li>Why does adding threads eventually slow a CPU-bound program? [III]</li>
+<li>Show how swapping <code>wait(empty)</code> and <code>lock(mutex)</code> deadlocks producer&ndash;consumer. [V]</li>
+<li>A server must handle 50k connections. Design its I/O model and justify it. [X, XIII]</li>
+<li>Explain why <code>malloc</code> is usually not a system call. [VII, XVI]</li>
+<li>Container vs VM: what isolates a container, and what's the trade-off? [XV]</li>
+<li>Your server slows to a crawl with high disk I/O and swap activity. Diagnose and fix. [VIII, XIV]</li>
+</ol>
+<div class="cp-mastered"><div class="box-title">Scoring</div>
+20–25 correct: interview- and exam-ready — you have genuine mastery. 15–19: solid; revisit the parts
+behind your misses. Below 15: re-read the flagged parts and redo their checkpoints before retesting.</div>
+</div>
+</div>
+
+<!-- ================= FINAL CHECKLIST ================= -->
+<h2 class="s" id="s23-8">Can I Say I Mastered Operating Systems?</h2>
+<p>The final, honest checklist. Every box ticked — cold, no notes — and the answer is <b>yes</b>.</p>
+
+<div class="box tip" style="font-size:9.9pt;"><div class="box-title"><span class="ic">&#9873;</span>The Mastery Checklist</div>
+<table style="width:100%;font-size:9.4pt;">
+<tbody>
+<tr><td style="width:6%" class="c">&#9633;</td><td>I can explain what an OS is and does without reaching for a definition.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can draw the user/kernel boundary and every way to cross it.</td></tr>
+<tr><td class="c">&#9633;</td><td>I understand processes and threads deeply enough to write and debug concurrent code.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can solve any CPU-scheduling, paging, page-replacement, Banker's, or disk problem by hand.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can implement synchronization (mutex, semaphore) and the three classic problems.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can reason about deadlock: cause it, detect it, prevent it, avoid it.</td></tr>
+<tr><td class="c">&#9633;</td><td>I understand virtual memory, the TLB, page faults, and thrashing well enough to diagnose real systems.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can explain file systems, I/O, IPC, storage, and networking from the OS's point of view.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can use Linux tools to observe every concept live and read the output back to theory.</td></tr>
+<tr><td class="c">&#9633;</td><td>I understand virtualization and containers at the level of namespaces and cgroups.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can narrate the full path of running a program, a page fault, or a packet arriving.</td></tr>
+<tr><td class="c">&#9633;</td><td>I can answer OS interview questions in the answer&ndash;mechanism&ndash;trade-off shape and defend them.</td></tr>
+<tr><td class="c">&#9633;</td><td>I have built real systems code — a shell, an allocator, a thread pool — and can explain every syscall.</td></tr>
+</tbody>
+</table>
+</div>
+
+<div class="box concept" style="text-align:center;"><div class="box-title" style="justify-content:center;"><span class="ic">&#9635;</span>You Made It</div>
+If those boxes are ticked, you began at "I know almost nothing about operating systems" and arrived at
+someone who can <b>explain OS concepts, solve OS problems, reason about processes, threads,
+synchronization, memory, and Linux internals, and answer any OS interview question with confidence.</b>
+That is mastery. Now go build something that uses it.</div>
+
+<hr class="soft">
+<p class="center small">— End of <b>Operating Systems Mastery</b> —<br>
+From fundamentals to advanced systems, Linux &amp; interviews.</p>

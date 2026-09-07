@@ -1,0 +1,180 @@
+<!-- ===================== PART XIX CONTENT ===================== -->
+<h1 class="chapter" id="ch19" data-run="Numerical Practice"><span class="chnum">Part XIX</span>Numerical Practice</h1>
+
+<p class="lead">Every problem below is fully solved — Gantt chart, table, and final numbers — using the
+formulas from the relevant chapter. Cover the solution, try it yourself, then check. Getting these
+automatic is the single best exam preparation there is.</p>
+
+<h2 class="s" id="s19-1">CPU Scheduling</h2>
+
+<h3>Problem 1 — FCFS vs SRTF vs Round Robin on one workload</h3>
+<p><b>Given:</b> P1(AT=0, BT=4), P2(AT=1, BT=3), P3(AT=2, BT=1), P4(AT=3, BT=2). For RR use quantum
+q=2. Compute average waiting and turnaround time for each policy.</p>
+
+<p><b>(a) FCFS</b> — serve in arrival order P1, P2, P3, P4.</p>
+<div class="gantt">
+  <div class="seg" style="flex:4"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:3">P2</div>
+  <div class="seg" style="flex:1">P3</div>
+  <div class="seg" style="flex:2">P4<span class="tke">10</span></div>
+</div>
+<table class="avoid" style="width:74%">
+<thead><tr><th>P</th><th class="c">AT</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">4</td><td class="c">4</td><td class="c">4</td><td class="c">0</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">3</td><td class="c">7</td><td class="c">6</td><td class="c">3</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">1</td><td class="c">8</td><td class="c">6</td><td class="c">5</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">2</td><td class="c">10</td><td class="c">7</td><td class="c">5</td></tr>
+</tbody>
+</table>
+<div class="formula">FCFS: Average WT = 13/4 = <b>3.25</b>, Average TAT = 23/4 = <b>5.75</b></div>
+
+<p><b>(b) SRTF</b> — preempt whenever a shorter remaining time appears.</p>
+<p class="small">t0 run P1. t2: P3(1) arrives, is shortest &rarr; preempt P1 (rem 2), run P3, done t3. t3:
+P4(2) arrives; remaining P1=2, P2=3, P4=2 &rarr; run P1 (earlier), done t5. Then P4 (t5–7), then P2 (t7–10).</p>
+<div class="gantt">
+  <div class="seg" style="flex:2"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:1">P3</div>
+  <div class="seg" style="flex:2">P1</div>
+  <div class="seg" style="flex:2">P4</div>
+  <div class="seg" style="flex:3">P2<span class="tke">10</span></div>
+</div>
+<table class="avoid" style="width:74%">
+<thead><tr><th>P</th><th class="c">AT</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">4</td><td class="c">5</td><td class="c">5</td><td class="c">1</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">3</td><td class="c">10</td><td class="c">9</td><td class="c">6</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">1</td><td class="c">3</td><td class="c">1</td><td class="c">0</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">2</td><td class="c">7</td><td class="c">4</td><td class="c">2</td></tr>
+</tbody>
+</table>
+<div class="formula">SRTF: Average WT = 9/4 = <b>2.25</b>, Average TAT = 19/4 = <b>4.75</b> &nbsp;(best — SRTF minimizes WT)</div>
+
+<p><b>(c) Round Robin, q=2.</b> Queue order as processes arrive/are preempted.</p>
+<div class="gantt">
+  <div class="seg" style="flex:2"><span class="tk">0</span>P1</div>
+  <div class="seg" style="flex:2">P2</div>
+  <div class="seg" style="flex:1">P3</div>
+  <div class="seg" style="flex:2">P1</div>
+  <div class="seg" style="flex:2">P4</div>
+  <div class="seg" style="flex:1">P2<span class="tke">10</span></div>
+</div>
+<table class="avoid" style="width:82%">
+<thead><tr><th>P</th><th class="c">AT</th><th class="c">BT</th><th class="c">CT</th><th class="c">TAT</th><th class="c">WT</th><th class="c">RT</th></tr></thead>
+<tbody>
+<tr><td>P1</td><td class="c">0</td><td class="c">4</td><td class="c">7</td><td class="c">7</td><td class="c">3</td><td class="c">0</td></tr>
+<tr><td>P2</td><td class="c">1</td><td class="c">3</td><td class="c">10</td><td class="c">9</td><td class="c">6</td><td class="c">1</td></tr>
+<tr><td>P3</td><td class="c">2</td><td class="c">1</td><td class="c">5</td><td class="c">3</td><td class="c">2</td><td class="c">2</td></tr>
+<tr><td>P4</td><td class="c">3</td><td class="c">2</td><td class="c">9</td><td class="c">6</td><td class="c">4</td><td class="c">4</td></tr>
+</tbody>
+</table>
+<div class="formula">RR: Average WT = 15/4 = <b>3.75</b>, Average TAT = 24/4 = <b>6.0</b>, Average RT = 7/4 = <b>1.75</b> (best response)</div>
+<p class="small"><b>Takeaway:</b> SRTF wins average waiting time; RR wins average response time; FCFS is
+simplest. Same workload, different winners — pick by the metric that matters.</p>
+
+<h3>Problem 2 — Non-preemptive Priority</h3>
+<p><b>Given</b> (all AT=0, lower number = higher priority): P1(BT=3, pri=3), P2(BT=5, pri=1),
+P3(BT=1, pri=4), P4(BT=4, pri=2). Order by priority: P2, P4, P1, P3.</p>
+<div class="gantt">
+  <div class="seg" style="flex:5"><span class="tk">0</span>P2</div>
+  <div class="seg" style="flex:4">P4</div>
+  <div class="seg" style="flex:3">P1</div>
+  <div class="seg" style="flex:1">P3<span class="tke">13</span></div>
+</div>
+<div class="formula">WT: P2=0, P4=5, P1=9, P3=12 &rarr; Avg WT = 26/4 = <b>6.5</b>; Avg TAT = 39/4 = <b>9.75</b></div>
+
+<!-- ================= MEMORY ================= -->
+<h2 class="s" id="s19-2">Memory: Paging, Translation, TLB</h2>
+
+<h3>Problem 3 — Address translation</h3>
+<p><b>Given:</b> page size = 1&nbsp;KB (1024 bytes), and the page table maps page 1 &rarr; frame 20.
+Translate logical address <b>1500</b>.</p>
+<ul class="tight">
+<li>Offset bits: 1024 = 2<sup>10</sup> &rarr; 10-bit offset.</li>
+<li>Page number = &lfloor;1500 / 1024&rfloor; = <b>1</b>; &nbsp; offset = 1500 &minus; 1024 = <b>476</b>.</li>
+<li>Page 1 &rarr; frame 20. Physical address = 20 &times; 1024 + 476 = 20480 + 476 = <b>20956</b>.</li>
+</ul>
+
+<h3>Problem 4 — Address-space sizing</h3>
+<p><b>Given:</b> 32-bit logical addresses, 4&nbsp;KB pages. (a) How many entries in a single-level page
+table? (b) How many offset bits?</p>
+<ul class="tight">
+<li>Offset: 4&nbsp;KB = 2<sup>12</sup> &rarr; <b>12 offset bits</b>.</li>
+<li>Page number bits = 32 &minus; 12 = 20 &rarr; entries = 2<sup>20</sup> = <b>1,048,576 entries</b>
+per process. (This is why multi-level page tables exist — Part VII.)</li>
+</ul>
+
+<h3>Problem 5 — TLB effective access time</h3>
+<p><b>Given:</b> TLB access 20&nbsp;ns, memory access 100&nbsp;ns, TLB hit ratio 80%. The TLB is
+checked on every reference.</p>
+<div class="formula">EAT = 0.8&times;(20+100) + 0.2&times;(20+2&times;100) = 0.8&times;120 + 0.2&times;220 = 96 + 44 = <b>140&nbsp;ns</b></div>
+<p class="small">On a miss you pay the TLB check <em>plus</em> a page-table read (100&nbsp;ns) <em>plus</em>
+the data access (100&nbsp;ns) = 220&nbsp;ns. Higher hit ratios push EAT toward 120&nbsp;ns.</p>
+
+<h3>Problem 6 — Page replacement (FIFO, LRU, Optimal)</h3>
+<p><b>Given:</b> reference string <span class="kv">7 0 1 2 0 3 0 4 2 3 0 3 2</span>, 3 frames. Count
+page faults for each policy.</p>
+<table class="avoid">
+<thead><tr><th>Ref</th><th class="c">7</th><th class="c">0</th><th class="c">1</th><th class="c">2</th><th class="c">0</th><th class="c">3</th><th class="c">0</th><th class="c">4</th><th class="c">2</th><th class="c">3</th><th class="c">0</th><th class="c">3</th><th class="c">2</th></tr></thead>
+<tbody>
+<tr><td>FIFO fault?</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">&middot;</td></tr>
+<tr><td>LRU fault?</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">F</td><td class="c">&middot;</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">&middot;</td></tr>
+<tr><td>OPT fault?</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">F</td><td class="c">&middot;</td><td class="c">F</td><td class="c">&middot;</td><td class="c">F</td><td class="c">&middot;</td><td class="c">&middot;</td><td class="c">F</td><td class="c">&middot;</td><td class="c">&middot;</td></tr>
+</tbody>
+</table>
+<div class="formula">FIFO = <b>10 faults</b> &emsp; LRU = <b>9 faults</b> &emsp; Optimal = <b>7 faults</b></div>
+<p class="small">Optimal is always best; here LRU beats FIFO. (Reproduce this with the simulator in
+Project 13.)</p>
+
+<!-- ================= DEADLOCK ================= -->
+<h2 class="s" id="s19-3">Deadlocks: Banker's Algorithm</h2>
+<h3>Problem 7 — Is the state safe?</h3>
+<p><b>Given:</b> resources A,B,C with total = (9, 3, 6). Snapshot:</p>
+<table class="avoid">
+<thead><tr><th rowspan="2">P</th><th colspan="3" class="c">Allocation</th><th colspan="3" class="c">Max</th><th colspan="3" class="c">Need</th></tr>
+<tr><th class="c">A</th><th class="c">B</th><th class="c">C</th><th class="c">A</th><th class="c">B</th><th class="c">C</th><th class="c">A</th><th class="c">B</th><th class="c">C</th></tr></thead>
+<tbody>
+<tr><td>P0</td><td class="c">1</td><td class="c">0</td><td class="c">0</td><td class="c">3</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">2</td></tr>
+<tr><td>P1</td><td class="c">2</td><td class="c">1</td><td class="c">1</td><td class="c">3</td><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">1</td><td class="c">1</td></tr>
+<tr><td>P2</td><td class="c">2</td><td class="c">1</td><td class="c">1</td><td class="c">4</td><td class="c">2</td><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">1</td></tr>
+<tr><td>P3</td><td class="c">1</td><td class="c">0</td><td class="c">2</td><td class="c">2</td><td class="c">1</td><td class="c">3</td><td class="c">1</td><td class="c">1</td><td class="c">1</td></tr>
+</tbody>
+</table>
+<p>Allocated = (6, 2, 4), so <b>Available = (9,3,6) &minus; (6,2,4) = (3, 1, 2)</b>. Run the safety check:</p>
+<table class="avoid">
+<thead><tr><th>Step</th><th>Process (Need &le; Work?)</th><th class="c">Work before</th><th class="c">+ Allocation</th><th class="c">Work after</th></tr></thead>
+<tbody>
+<tr><td>1</td><td>P1 (1,1,1) &le; (3,1,2) ✓</td><td class="c">3 1 2</td><td class="c">2 1 1</td><td class="c">5 2 3</td></tr>
+<tr><td>2</td><td>P2 (2,1,1) &le; (5,2,3) ✓</td><td class="c">5 2 3</td><td class="c">2 1 1</td><td class="c">7 3 4</td></tr>
+<tr><td>3</td><td>P3 (1,1,1) &le; (7,3,4) ✓</td><td class="c">7 3 4</td><td class="c">1 0 2</td><td class="c">8 3 6</td></tr>
+<tr><td>4</td><td>P0 (2,2,2) &le; (8,3,6) ✓</td><td class="c">8 3 6</td><td class="c">1 0 0</td><td class="c">9 3 6</td></tr>
+</tbody>
+</table>
+<div class="formula">All processes finish &rArr; <b>SAFE</b>. Safe sequence = &lang; P1, P2, P3, P0 &rang;</div>
+
+<!-- ================= DISK ================= -->
+<h2 class="s" id="s19-4">Disk Scheduling</h2>
+<h3>Problem 8 — All six algorithms on one queue</h3>
+<p><b>Given:</b> request queue <span class="kv">82, 170, 43, 140, 24, 16, 190</span>; head starts at
+<b>50</b>, moving toward higher cylinders; disk range 0–199.</p>
+
+<table class="avoid">
+<thead><tr><th style="width:14%">Algorithm</th><th>Service order</th><th class="c">Total head movement</th></tr></thead>
+<tbody>
+<tr><td>FCFS</td><td class="small">82,170,43,140,24,16,190</td><td class="c">32+88+127+97+116+8+174 = <b>642</b></td></tr>
+<tr><td>SSTF</td><td class="small">43,24,16,82,140,170,190</td><td class="c">7+19+8+66+58+30+20 = <b>208</b></td></tr>
+<tr><td>SCAN</td><td class="small">82,140,170,190,→199,43,24,16</td><td class="c">(199&minus;50)+(199&minus;16) = <b>332</b></td></tr>
+<tr><td>C-SCAN</td><td class="small">82,140,170,190,→199,→0,16,24,43</td><td class="c">149+199+43 = <b>391</b></td></tr>
+<tr><td>LOOK</td><td class="small">82,140,170,190,43,24,16</td><td class="c">(190&minus;50)+(190&minus;16) = <b>314</b></td></tr>
+<tr><td>C-LOOK</td><td class="small">82,140,170,190,→16,24,43</td><td class="c">140+174+27 = <b>341</b></td></tr>
+</tbody>
+</table>
+<div class="formula">Most efficient here: <b>SSTF (208)</b>; worst: <b>FCFS (642)</b>. SCAN/LOOK trade a little
+efficiency for no starvation.</div>
+<p class="small"><b>Method reminder:</b> sort the requests, mark the head, respect the stated direction,
+and remember SCAN/C-SCAN travel to the disk <em>edge</em> while LOOK/C-LOOK stop at the last request.</p>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Exam Strategy</div>
+Always (1) draw the Gantt chart / head path <em>first</em>, (2) read off Completion Times / boundaries,
+(3) then apply the formulas mechanically. Most lost marks come from a wrong Gantt chart or forgetting
+idle time / direction — not from the arithmetic. Show every step; partial credit is real.</div>

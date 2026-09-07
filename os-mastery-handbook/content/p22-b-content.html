@@ -1,0 +1,101 @@
+<!-- ===================== PART XXII CONTENT ===================== -->
+<h1 class="chapter" id="ch22" data-run="Mastery Checkpoints"><span class="chnum">Part XXII</span>Mastery Checkpoints</h1>
+
+<p class="lead">Learning without feedback is guessing. Use this dashboard honestly: for each part, can you
+do the thing in the "Mastered when" column <em>without notes</em>? Tick it only when you truly can. The
+gaps are your study list.</p>
+
+<h2 class="s" id="s22-1">Self-Assessment Grid</h2>
+<p>Rate each part: <b>&#9633;</b> not yet &middot; <b>&#9635;</b> getting there &middot; <b>&#9632;</b>
+mastered. You have mastered a part when you can hit its bar cold.</p>
+
+<table class="avoid">
+<thead><tr><th style="width:5%" class="c">✓</th><th style="width:20%">Part</th><th>Mastered when you can&hellip;</th></tr></thead>
+<tbody>
+<tr><td class="c">&#9633;</td><td>I — Fundamentals</td><td>draw the syscall stack, explain what enforces each boundary, and trace a single <code>write()</code>.</td></tr>
+<tr><td class="c">&#9633;</td><td>II — Processes</td><td>write fork/exec/wait from scratch, predict its output, and describe the PCB changes at each step.</td></tr>
+<tr><td class="c">&#9633;</td><td>III — Threads</td><td>draw the shared/private thread model and explain why <code>counter++</code> races.</td></tr>
+<tr><td class="c">&#9633;</td><td>IV — CPU Scheduling</td><td>build a Gantt chart and compute WT/TAT/RT for any algorithm on any table.</td></tr>
+<tr><td class="c">&#9633;</td><td>V — Synchronization</td><td>implement producer&ndash;consumer, readers&ndash;writers, and deadlock-free philosophers from memory.</td></tr>
+<tr><td class="c">&#9633;</td><td>VI — Deadlocks</td><td>run the Banker's Algorithm and spot a lock-ordering bug in real code.</td></tr>
+<tr><td class="c">&#9633;</td><td>VII — Memory</td><td>translate any logical address by hand and compute EAT with a TLB.</td></tr>
+<tr><td class="c">&#9633;</td><td>VIII — Virtual Memory</td><td>trace FIFO/LRU/Optimal on a reference string and diagnose thrashing.</td></tr>
+<tr><td class="c">&#9633;</td><td>IX — File Systems</td><td>explain the name&rarr;inode&rarr;block path and hard vs soft link behavior.</td></tr>
+<tr><td class="c">&#9633;</td><td>X — I/O</td><td>explain why the OS uses interrupt-driven DMA over polling, and classify any I/O call.</td></tr>
+<tr><td class="c">&#9633;</td><td>XI — IPC</td><td>pick the right IPC mechanism for a scenario and justify it.</td></tr>
+<tr><td class="c">&#9633;</td><td>XII — Storage</td><td>compute head movement for every disk algorithm and choose a RAID level.</td></tr>
+<tr><td class="c">&#9633;</td><td>XIII — Networking</td><td>write the five-call TCP server and trace a packet through kernel and NIC.</td></tr>
+<tr><td class="c">&#9633;</td><td>XIV — Linux</td><td>pick the right tool to observe any concept live and read its output back to theory.</td></tr>
+<tr><td class="c">&#9633;</td><td>XV — Advanced</td><td>explain VM vs container precisely and connect namespaces/cgroups to OS concepts.</td></tr>
+<tr><td class="c">&#9633;</td><td>XVI — What Happens When</td><td>narrate any of the 18 flows smoothly, naming hardware, syscalls, and subsystems.</td></tr>
+<tr><td class="c">&#9633;</td><td>XVII — Projects</td><td>start the shell, allocator, or thread pool from a blank file and explain each syscall.</td></tr>
+<tr><td class="c">&#9633;</td><td>XVIII — Interviews</td><td>answer any Level 1–3 question in the answer&ndash;mechanism&ndash;tradeoff shape.</td></tr>
+</tbody>
+</table>
+
+<h2 class="s" id="s22-2">The Consolidated "Can You Explain This?" List</h2>
+<p>The single highest-leverage revision check: go down this list and explain each item aloud in 30
+seconds, no notes. Anything you stumble on is a part to revisit.</p>
+
+<div class="two-col">
+<ol class="tight">
+<li>The user/kernel boundary and the three ways to cross it</li>
+<li>API vs system call; why syscalls are expensive</li>
+<li>Resource manager vs extended machine</li>
+<li>Monolithic vs microkernel trade-offs</li>
+<li>Program vs process; the process address space</li>
+<li>The five-state diagram with every transition</li>
+<li>fork/exec/wait and copy-on-write</li>
+<li>Zombie vs orphan vs daemon</li>
+<li>What a context switch saves/restores and its overhead</li>
+<li>Thread shared vs private memory</li>
+<li>Concurrency vs parallelism</li>
+<li>Why <code>counter++</code> races; critical sections</li>
+<li>Building a Gantt chart; WT/TAT/RT formulas</li>
+<li>Convoy effect, starvation, aging</li>
+<li>Mutex vs semaphore vs binary semaphore</li>
+<li>Spinlock vs mutex; busy-wait vs block</li>
+</ol>
+<ol class="tight" start="17">
+<li>Producer&ndash;consumer and its ordering-bug deadlock</li>
+<li>The four Coffman conditions and how to break each</li>
+<li>Safe vs unsafe vs deadlocked; the Banker's check</li>
+<li>Deadlock vs livelock vs starvation</li>
+<li>Logical&rarr;physical translation; page/offset math</li>
+<li>The TLB and effective access time</li>
+<li>Internal vs external fragmentation</li>
+<li>The page-fault handling flow (minor vs major)</li>
+<li>FIFO vs LRU vs Optimal; Belady's anomaly</li>
+<li>Thrashing and the working set</li>
+<li>Inode vs directory vs data block; links</li>
+<li>Polling vs interrupt vs DMA; buffering vs caching</li>
+<li>Shared memory vs message passing; fastest IPC</li>
+<li>Disk scheduling; RAID 0/1/5/6/10</li>
+<li>TCP vs UDP; socket = fd; epoll and C10K</li>
+<li>VM vs container; namespaces &amp; cgroups; ASLR; page cache</li>
+</ol>
+</div>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>How to use checkpoints to actually learn</div>
+Don't just read — <b>retrieve</b>. Cover the answer and force yourself to produce it; the effortful
+recall is what builds durable memory (this is "active recall," the best-evidenced study technique).
+Then <b>space</b> it: revisit a part after 1 day, 3 days, and a week. The checkpoints and this list are
+designed for exactly that loop.</div>
+
+<h2 class="s" id="s22-3">A Suggested Study Schedule</h2>
+<table class="avoid">
+<thead><tr><th style="width:16%">Timeframe</th><th>Focus</th></tr></thead>
+<tbody>
+<tr><td>Week 1</td><td>Parts I–IV (fundamentals, processes, threads, scheduling) + their checkpoints and practical tasks. Build Projects 1–5.</td></tr>
+<tr><td>Week 2</td><td>Parts V–VIII (sync, deadlocks, memory, virtual memory) + numericals in Part XIX. Build Projects 6–10.</td></tr>
+<tr><td>Week 3</td><td>Parts IX–XIII (file systems, I/O, IPC, storage, networking). Build Projects 11–13.</td></tr>
+<tr><td>Week 4</td><td>Parts XIV–XVI (Linux hands-on, advanced, "what happens when"). Build Projects 14–16.</td></tr>
+<tr><td>Interview week</td><td>Part XVIII (question bank) + Part XX (tables) + Part XVI (flows) + this list, daily active recall.</td></tr>
+<tr><td>Exam week</td><td>Part XIX (numericals) + every checkpoint + Part XXIII cheat sheet.</td></tr>
+</tbody>
+</table>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>The honest bar</div>
+"I read it and it made sense" is <em>not</em> mastery — recognition fools everyone. The real bar is on
+the right of the grid above: can you <em>produce</em> it, cold, out loud or on a whiteboard? Tick a box
+only when the answer is yes. When every box is filled, Part XXIII's final test will feel easy.</div>
