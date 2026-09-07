@@ -1,0 +1,491 @@
+<!-- ===================== PART I CONTENT ===================== -->
+<h1 class="chapter" id="ch1" data-run="OS Fundamentals &amp; Architecture"><span class="chnum">Part I</span>OS Fundamentals &amp; Architecture</h1>
+
+<p class="lead">A modern computer is a pile of extraordinarily fast but extraordinarily literal hardware.
+The operating system is the layer of software that turns that raw hardware into something a
+human — and a program — can actually use safely. This part builds the mental model that every
+later part depends on.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-1">What Is an Operating System?</h2>
+
+<p><b>What is it?</b> An <span class="term">operating system (OS)</span> is the master program that
+sits between your applications and the physical hardware. It controls the hardware and provides
+services that every program can use, so that programs never have to talk to the raw metal directly.</p>
+
+<p><b>Why do we need it?</b> Imagine writing a program that plays a sound. Without an OS you would
+have to know the exact model of sound card, write the precise byte sequences it expects, manage the
+electrical timing, and make sure no other program touches the card at the same time. Now do that
+again for every keyboard, disk, network card, and GPU ever made. It is hopeless. The OS solves this
+once, for everyone, and hands you a simple request like "play these bytes."</p>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+An operating system does two big jobs at once: it is a <b>resource manager</b> (it decides who gets
+the CPU, memory, and devices, and when) and an <b>extended machine / abstraction layer</b> (it hides
+ugly hardware details behind clean, uniform interfaces like files and processes).</div>
+
+<p><b>Simple intuition.</b> Think of an OS as the <em>manager of a busy shared workshop</em>. Many
+workers (programs) want the same tools (CPU, memory, printer). The manager hands out tools fairly,
+stops two workers from grabbing the same tool at once, cleans up when a worker leaves, and gives
+everyone the same simple checkout process instead of making each worker learn how every tool is
+wired internally.</p>
+
+<p><b>Technical explanation.</b> The OS is a collection of software — centered on the <b>kernel</b> —
+that (1) manages hardware resources (processor time, memory, storage, I/O devices), (2) provides an
+execution environment for programs called the <b>process</b>, (3) exposes services through
+<b>system calls</b>, and (4) enforces <b>protection</b> so a fault or attack in one program cannot
+corrupt another or the OS itself.</p>
+
+<p><b>How it works internally.</b> The OS is loaded into memory at boot and stays resident. It runs
+in a privileged CPU mode so it can execute instructions ordinary programs cannot. When a program
+needs something only the OS can do (read a file, get more memory, send a packet), it makes a
+controlled request that switches the CPU into the OS, the OS does the work, and control returns to
+the program. Between those requests, the OS is mostly idle — it is <em>event-driven</em>, woken by
+system calls and hardware interrupts.</p>
+
+<p><b>Example.</b> When you run <code>ls</code> in a terminal, the OS finds the program on disk,
+loads it into memory, gives it CPU time, lets it ask the file system for directory contents, sends
+its output to your terminal, and reclaims its memory when it exits — all without <code>ls</code>
+knowing anything about your specific SSD or display.</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node u">Applications &nbsp;<span class="sub">browser, editor, game, <code>ls</code></span></div>
+    <div class="arr">&darr;</div>
+    <div class="node">Operating System (kernel + services)<span class="sub">processes, memory, files, scheduling, protection</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node hw">Hardware<span class="sub">CPU, RAM, disk, keyboard, network card, GPU</span></div>
+  </div>
+  <figcaption>The OS is the mandatory middle layer: applications go through it to reach hardware.</figcaption>
+</figure>
+
+<p><b>Real-world example.</b> Linux, Windows, macOS, Android, and iOS are operating systems. The same
+Chrome browser binary logic runs on wildly different laptops because the OS hides those differences.
+Your phone runs dozens of apps on one CPU because the OS shares it among them.</p>
+
+<p><b>Related concepts.</b> Kernel (&sect;1.4), system calls (&sect;1.7), processes (Part II), and
+protection (&sect;1.10) are all facets of these two core jobs.</p>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+"The OS is the desktop, windows, and icons." That graphical shell is just one <em>application</em>
+running on top of the OS. You can run Linux with no graphics at all. The OS is the kernel and its
+services — the part that manages the hardware — not the wallpaper.</div>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+Asked "What is an operating system?", give the two-job answer in one breath: <em>"It's the software
+that manages hardware resources and provides an abstraction layer so programs can use the hardware
+safely and portably through a uniform interface."</em> Then be ready to expand either half.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-2">Resource Manager &amp; Extended Machine</h2>
+
+<p>These are the two classic lenses for understanding <em>everything</em> an OS does. Every feature
+in this book is one or the other (usually both).</p>
+
+<h3>The OS as a Resource Manager</h3>
+<p>The hardware has finite resources; many programs want them simultaneously. The OS multiplexes
+them — in <b>time</b> (the CPU runs process A for a few milliseconds, then B, then C, so fast it
+looks simultaneous) and in <b>space</b> (RAM is divided so each process gets its own region). It
+must do this <em>fairly</em> (no program starves), <em>efficiently</em> (little overhead), and
+<em>safely</em> (one program cannot read or wreck another's resources).</p>
+
+<table class="avoid">
+<thead><tr><th style="width:22%">Resource</th><th>How the OS manages it</th><th>Covered in</th></tr></thead>
+<tbody>
+<tr><td>CPU time</td><td>Scheduling: decides which process/thread runs next and for how long</td><td>Part IV</td></tr>
+<tr><td>Main memory</td><td>Allocation, paging, virtual memory, protection</td><td>Parts VII–VIII</td></tr>
+<tr><td>Storage</td><td>File systems, disk scheduling, free-space management</td><td>Parts IX, XII</td></tr>
+<tr><td>I/O devices</td><td>Drivers, interrupts, DMA, buffering</td><td>Part X</td></tr>
+<tr><td>Access / identity</td><td>Users, permissions, isolation</td><td>&sect;1.10</td></tr>
+</tbody>
+</table>
+
+<h3>The OS as an Extended (Virtual) Machine</h3>
+<p>Raw hardware is hostile to program: disks store numbered blocks, not "files"; memory is one flat
+array shared by all; the CPU has no notion of "a program." The OS presents a friendlier
+<b>extended machine</b> where those hard things become easy abstractions:</p>
+
+<table class="avoid">
+<thead><tr><th style="width:34%">Ugly hardware reality</th><th>Clean OS abstraction</th></tr></thead>
+<tbody>
+<tr><td>Numbered disk sectors, no names</td><td><b>Files</b> and directories with names</td></tr>
+<tr><td>One shared physical RAM</td><td>A private <b>virtual address space</b> per program</td></tr>
+<tr><td>One CPU, one instruction stream</td><td>Many concurrent <b>processes</b> and <b>threads</b></td></tr>
+<tr><td>Device-specific register pokes</td><td>Uniform <code>read()</code>/<code>write()</code> calls</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Abstraction</b> = hiding complexity behind a simpler interface. <b>Virtualization</b> = giving
+each program the illusion it has the whole machine to itself. The OS does both constantly: a file is
+an abstraction of disk blocks; a process is a virtualization of the CPU; virtual memory is a
+virtualization of RAM.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-3">Hardware, OS, and Application: The Layered View</h2>
+
+<p>The single most useful picture in this book. Memorize it — nearly every question about "what
+happens when…" is really a question about how a request travels down and back up these layers.</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node u">Application<span class="sub">your program: uses functions, not hardware</span></div>
+    <div class="arr">&darr; calls a function</div>
+    <div class="node u">Library / API<span class="sub">e.g. C standard library: <code>printf</code>, <code>fopen</code>, <code>malloc</code></span></div>
+    <div class="arr">&darr; issues a</div>
+    <div class="node k">System Call<span class="sub">controlled entry into the kernel (<code>read</code>, <code>write</code>, <code>mmap</code>)</span></div>
+    <div class="arr">&darr; traps into</div>
+    <div class="node k">Kernel<span class="sub">privileged code: does the real work, talks to drivers</span></div>
+    <div class="arr">&darr; drives</div>
+    <div class="node hw">Hardware<span class="sub">CPU, RAM, disk, NIC — the physical machine</span></div>
+  </div>
+  <figcaption>The canonical stack. A request flows down; results (and interrupts) flow back up.</figcaption>
+</figure>
+
+<p>The two horizontal lines that matter most are: the <b>API boundary</b> (between your app and the
+library) and the <b>system-call boundary</b> (between user space and the kernel). The second is the
+famous "user/kernel line," and crossing it is not free — see &sect;1.7.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-4">Kernel, User Space, and Kernel Space</h2>
+
+<p><b>What is the kernel?</b> The <span class="term">kernel</span> is the core of the OS — the part
+that is always in memory, runs with full hardware privilege, and directly manages processes, memory,
+and devices. When people say "the OS did X," they usually mean the kernel did X.</p>
+
+<p>Memory is conceptually split into two territories:</p>
+<dl>
+<dt>Kernel space</dt><dd>The memory region where the kernel's code and data live. Only privileged
+(kernel-mode) code may access it. Protected from ordinary programs.</dd>
+<dt>User space</dt><dd>Where ordinary programs (and their libraries) run. Each process gets its own
+user-space view. Code here cannot touch kernel space or other processes' memory directly.</dd>
+</dl>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>User space vs kernel space</b> is about <em>memory and privilege territory</em>. <b>User mode vs
+kernel mode</b> (next section) is about the <em>CPU's current privilege state</em>. They move together:
+code in user space runs in user mode; the kernel runs in kernel mode. Do not confuse the two axes —
+one is "where the memory is," the other is "what the CPU is allowed to do right now."</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-5">Dual-Mode Operation: User Mode and Kernel Mode</h2>
+
+<p><b>Why do we need it?</b> If every program could run any instruction and touch any memory, one
+buggy or malicious program could halt the CPU, erase the disk, or read your passwords out of another
+program. To prevent that, the CPU itself supports (at least) two privilege levels.</p>
+
+<dl>
+<dt>Kernel mode (supervisor / privileged mode)</dt><dd>The CPU can execute <em>every</em> instruction
+and access <em>all</em> memory and devices. The kernel runs here.</dd>
+<dt>User mode</dt><dd>A restricted state. <em>Privileged</em> instructions are forbidden; memory
+access is limited to the process's own space. Applications run here.</dd>
+</dl>
+
+<p><b>How it works internally.</b> A bit in a CPU register (the "mode bit," e.g. current privilege
+level / ring on x86) records the mode. In user mode, if a program attempts a privileged instruction
+or touches memory it does not own, the hardware immediately raises an <b>exception (trap)</b> and
+jumps into the kernel, which typically kills the offending program (the classic <em>segmentation
+fault</em>). The <em>only</em> legitimate ways to get from user mode into kernel mode are a
+<b>system call</b>, an <b>interrupt</b>, or an <b>exception</b> — all of which enter the kernel at
+fixed, trusted entry points. A program can never simply "switch itself" to kernel mode; that is the
+whole point.</p>
+
+<figure class="diagram">
+<div class="asciiart">   USER MODE                          KERNEL MODE
+  (restricted)                       (full power)
+  ┌────────────┐   syscall / trap    ┌─────────────┐
+  │ your app   │ ─────────────────▶  │   kernel    │
+  │ runs here  │                     │  runs here  │
+  │            │ ◀───────────────── │             │
+  └────────────┘   return to user    └─────────────┘
+        │                                   │
+   privileged instr?                  can do anything:
+   → hardware TRAPS ────────────────▶ I/O, halt, MMU,
+     into the kernel                  all memory</div>
+<figcaption>Dual-mode operation. The mode bit gates what the CPU may do; controlled doorways cross it.</figcaption>
+</figure>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Thinking a program "calls the kernel like a normal function." It does not — a normal call cannot
+change privilege. A system call executes a special CPU instruction (e.g. <code>syscall</code> on
+x86-64) that atomically switches to kernel mode and jumps to a fixed kernel entry point. That
+hardware-enforced doorway is what makes the boundary safe.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-6">Privileged Instructions</h2>
+<p>A <span class="term">privileged instruction</span> is a machine instruction that can only be
+executed in kernel mode. These are exactly the operations that could compromise the whole system if
+any program could run them:</p>
+<ul class="tight">
+<li>Halting the CPU, disabling/enabling interrupts.</li>
+<li>Loading the page-table base register / switching address spaces (controlling the MMU).</li>
+<li>Direct access to I/O device registers.</li>
+<li>Modifying the mode bit or system control registers.</li>
+<li>Executing <code>hlt</code>, setting timers, flushing the TLB.</li>
+</ul>
+<p>Attempting any of these in user mode raises a trap. This single mechanism — "some instructions are
+off-limits unless you are the kernel" — is the hardware foundation of all OS protection.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-7">System Calls — and API vs System Call</h2>
+
+<p><b>What is it?</b> A <span class="term">system call</span> is the controlled mechanism by which a
+user-mode program requests a service from the kernel. It is the <em>only</em> door through which a
+program can ask the OS to do something privileged (open a file, allocate memory, create a process,
+send data on the network).</p>
+
+<p><b>Simple intuition.</b> You (a program) cannot walk into the bank vault (hardware). You slide a
+request form through a small, guarded window (the system call). A teller (the kernel) verifies your
+request, does it on your behalf, and slides the result back. You never touch the vault yourself.</p>
+
+<p><b>How it works internally (x86-64 Linux, step by step):</b></p>
+<ol class="tight">
+<li>The program puts the system-call <em>number</em> in a register (e.g. <code>rax</code>) and
+arguments in others (<code>rdi</code>, <code>rsi</code>, <code>rdx</code>&hellip;).</li>
+<li>It executes the <code>syscall</code> instruction. The CPU switches to kernel mode and jumps to a
+fixed kernel entry point (the system-call handler).</li>
+<li>The kernel looks up the number in the <b>system-call table</b>, validates the arguments, and runs
+the corresponding kernel function.</li>
+<li>The result is placed in a register; the kernel executes a return-from-kernel instruction that
+switches back to user mode and resumes the program right after the <code>syscall</code>.</li>
+</ol>
+
+<pre class="long"><span class="ttl">A raw system call vs. the library wrapper (Linux, C)</span><span class="cm">/* The C library gives you a friendly wrapper... */</span>
+ssize_t n = write(1, "hi\n", 3);   <span class="cm">// fd 1 = stdout, 3 bytes</span>
+
+<span class="cm">/* ...which internally does roughly this (conceptually): */</span>
+<span class="cm">//   mov rax, 1        ; syscall number for write on x86-64</span>
+<span class="cm">//   mov rdi, 1        ; arg1: file descriptor</span>
+<span class="cm">//   mov rsi, buf      ; arg2: pointer to data</span>
+<span class="cm">//   mov rdx, 3        ; arg3: byte count</span>
+<span class="cm">//   syscall           ; &lt;-- traps into the kernel</span>
+</pre>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept — API vs System Call</div>
+An <b>API</b> (Application Programming Interface) is the set of <em>functions your code calls</em>,
+such as the C library's <code>fopen()</code>, <code>printf()</code>, <code>malloc()</code>. A
+<b>system call</b> is the <em>kernel entry</em> underneath, such as <code>open</code>,
+<code>write</code>, <code>mmap</code>. Many API functions wrap one or more system calls — but not
+always: <code>strlen()</code> makes zero system calls, and one <code>printf()</code> may buffer many
+prints into a single <code>write</code>. <em>The API is what you program against; the system call is
+what actually crosses into the kernel.</em></div>
+
+<table class="avoid">
+<thead><tr><th style="width:26%">Aspect</th><th>API (library function)</th><th>System call</th></tr></thead>
+<tbody>
+<tr><td>Lives in</td><td>User space (e.g. libc)</td><td>Kernel (entered via a trap)</td></tr>
+<tr><td>Cost</td><td>Cheap — an ordinary function call</td><td>Expensive — mode switch + kernel work</td></tr>
+<tr><td>Example</td><td><code>printf</code>, <code>fopen</code>, <code>malloc</code></td><td><code>write</code>, <code>open</code>, <code>brk</code>/<code>mmap</code></td></tr>
+<tr><td>Portability</td><td>Portable across OSes (same C API)</td><td>OS-specific numbers &amp; semantics</td></tr>
+<tr><td>Purpose</td><td>Convenience, buffering, portability</td><td>The actual privileged service</td></tr>
+</tbody>
+</table>
+
+<p><b>Categories of system calls.</b> Process control (<code>fork</code>, <code>execve</code>,
+<code>exit</code>, <code>wait</code>), file management (<code>open</code>, <code>read</code>,
+<code>write</code>, <code>close</code>), device management (<code>ioctl</code>), information
+(<code>getpid</code>, <code>time</code>), communication (<code>pipe</code>, <code>socket</code>,
+<code>shmget</code>), and protection (<code>chmod</code>, <code>setuid</code>).</p>
+
+<div class="box tip"><div class="box-title"><span class="ic">&#9873;</span>Interview Tip</div>
+"Why are system calls expensive?" Because each one costs a <b>mode switch</b> (save user state,
+switch to kernel mode, run the handler, restore state) plus the kernel's own validation and work,
+and it can pollute CPU caches and pipelines. That is <em>why</em> libraries buffer — one big
+<code>write</code> beats a thousand tiny ones. This is also why high-performance systems batch I/O
+(<code>writev</code>, <code>io_uring</code>) to amortize the crossing.</div>
+
+<div class="box real"><div class="box-title"><span class="ic">&#9873;</span>Real World</div>
+Run <code>strace ls</code> on Linux. You will see the actual stream of system calls
+<code>ls</code> makes — <code>openat</code>, <code>read</code>, <code>write</code>,
+<code>close</code>, <code>mmap</code>. This is the single best way to <em>see</em> the user/kernel
+boundary in action. We use it throughout Part XIV.</div>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-8">Traps, Interrupts, and Exceptions</h2>
+
+<p>All three are ways the CPU stops what it is doing and jumps into the kernel. Interviewers love the
+distinction because candidates blur it. Here is the clean version:</p>
+
+<table class="avoid">
+<thead><tr><th style="width:16%">Term</th><th style="width:14%">Source</th><th style="width:16%">Timing</th><th>Meaning &amp; example</th></tr></thead>
+<tbody>
+<tr><td><b>Interrupt</b></td><td>External hardware (device)</td><td>Asynchronous</td>
+<td>A device signals it needs attention, unrelated to the current instruction. E.g. keyboard press, packet arrival, disk finished, timer tick.</td></tr>
+<tr><td><b>Exception / Fault</b></td><td>The running instruction (CPU)</td><td>Synchronous</td>
+<td>The current instruction did something the CPU can't complete. E.g. divide-by-zero, invalid memory access, <b>page fault</b>.</td></tr>
+<tr><td><b>Trap</b></td><td>A deliberate instruction</td><td>Synchronous</td>
+<td>The program <em>intentionally</em> asks to enter the kernel. E.g. a <b>system call</b>, a debugger breakpoint. (A "software interrupt.")</td></tr>
+</tbody>
+</table>
+
+<div class="box concept"><div class="box-title"><span class="ic">&#9635;</span>Key Concept</div>
+<b>Asynchronous vs synchronous</b> is the crisp dividing line. An <b>interrupt</b> is asynchronous —
+it comes from the outside world and can arrive between any two instructions. An <b>exception</b> and
+a <b>trap</b> are synchronous — they are caused <em>by</em> the instruction currently executing.
+A trap is the intentional kind of exception ("I meant to do that"); a fault is the unintended kind
+("something went wrong").</div>
+
+<p><b>How the kernel responds.</b> The CPU consults the <b>interrupt vector table</b> (a table of
+handler addresses indexed by interrupt/exception number), saves the current state, switches to kernel
+mode, and runs the matching <b>interrupt/exception handler</b>. When the handler finishes, the CPU
+restores state and resumes — either the interrupted program (for an interrupt) or, for a fault it
+fixed (like a page fault), <em>re-runs</em> the faulting instruction.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-9">OS Services</h2>
+<p>Everything the OS offers falls into a handful of service categories. You have now met the
+mechanisms; these are the user-facing results.</p>
+<ul class="tight">
+<li><b>Program execution</b> — load, run, and end programs (Part II).</li>
+<li><b>I/O operations</b> — read/write files and devices without touching hardware (Part X).</li>
+<li><b>File-system manipulation</b> — create, delete, search, and protect files (Part IX).</li>
+<li><b>Communication</b> — let processes exchange data locally or over a network (Parts XI, XIII).</li>
+<li><b>Error detection</b> — catch hardware and software faults and respond safely.</li>
+<li><b>Resource allocation</b> — share CPU, memory, and devices among many programs (Parts IV, VII).</li>
+<li><b>Accounting &amp; logging</b> — track who used what.</li>
+<li><b>Protection &amp; security</b> — isolate programs and users (&sect;1.10).</li>
+</ul>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-10">Protection and Security</h2>
+<p>These words are related but not identical, and mixing them up is a classic slip.</p>
+<dl>
+<dt>Protection</dt><dd>Controlling access by programs and users to the resources <em>inside</em> the
+system — e.g. stopping process A from reading process B's memory, or a user from deleting another
+user's files. It guards against <b>accidents and internal misuse</b>.</dd>
+<dt>Security</dt><dd>Defending the system against <em>external</em> threats — malware, network
+attackers, stolen credentials. It guards against <b>deliberate, often external, attacks</b>.</dd>
+</dl>
+<p>Mechanisms include dual-mode operation, memory protection via the MMU (Part VII), user/group
+permissions (Part IX), and modern additions like ASLR and namespaces (Part XV). Protection is the
+<em>foundation</em>; security is built on top of it.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-11">The Boot Process</h2>
+<p><b>The chicken-and-egg problem:</b> the OS manages the hardware, but the OS is a program that must
+itself be loaded and run <em>by</em> the hardware. <b>Booting</b> (from "bootstrapping" — pulling
+yourself up by your bootstraps) is how the machine climbs from bare power-on to a running OS.</p>
+
+<figure class="diagram">
+  <div class="flow vert">
+    <div class="node hw">Power on &rarr; CPU runs firmware<span class="sub">BIOS/UEFI code baked into the motherboard ROM</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node">POST + find boot device<span class="sub">test hardware, pick disk/SSD to boot from</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node">Bootloader loads<span class="sub">GRUB (Linux) / Windows Boot Manager — loaded from disk</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node k">Kernel loaded into RAM &amp; started<span class="sub">decompresses, sets up memory, drivers, mounts root filesystem</span></div>
+    <div class="arr">&darr;</div>
+    <div class="node u">First user process starts<span class="sub"><code>init</code>/<code>systemd</code> (PID 1) &rarr; launches everything else</span></div>
+  </div>
+  <figcaption>Cold boot to login. Each stage loads and hands control to the next, larger stage.</figcaption>
+</figure>
+
+<p>The detail-by-detail version — including what the firmware, bootloader, and PID 1 each do — is in
+Part XVI, "What happens when I turn on my computer?" For now, the shape is enough: <em>firmware &rarr;
+bootloader &rarr; kernel &rarr; init &rarr; your login</em>.</p>
+
+<!-- ======================================================= -->
+<h2 class="s" id="s1-12">OS Architectures: Monolithic, Micro, Hybrid, Modular</h2>
+
+<p>Where should all this OS code live — one giant privileged blob, or many small pieces? This design
+choice defines an OS's <b>architecture</b>, and it is a favorite interview and exam topic.</p>
+
+<h3>Monolithic Kernel</h3>
+<p>The entire OS — scheduling, memory, file systems, drivers, network stack — runs together in kernel
+space as one large program. Components call each other directly as fast function calls.</p>
+<p><b>+ </b>Very fast (no crossing between components). <b>&minus; </b>Huge, complex; a bug in any
+driver can crash the whole kernel; hard to maintain in isolation. <b>Examples:</b> classic UNIX,
+Linux (though modular), BSD.</p>
+
+<h3>Microkernel</h3>
+<p>Keep the kernel <em>tiny</em>: only the bare essentials (scheduling, basic memory, and
+inter-process messaging) run in kernel mode. Everything else — file systems, drivers, networking —
+runs as ordinary <b>user-space servers</b> that talk via message passing.</p>
+<p><b>+ </b>Robust and secure (a crashed driver doesn't take down the kernel; just restart the
+server); modular; easier to verify. <b>&minus; </b>Slower — lots of message passing and mode
+switches. <b>Examples:</b> Minix, QNX, seL4, the Mach core.</p>
+
+<figure class="diagram">
+<div class="asciiart">   MONOLITHIC                         MICROKERNEL
+ ┌─────────────────────┐        ┌──────┐ ┌──────┐ ┌───────┐  user
+ │ apps                │        │ file │ │ dev  │ │ net   │  space
+ ├─────────────────────┤ user   │ svr  │ │ drv  │ │ svr   │  servers
+ │  ▓▓ KERNEL ▓▓       │ ───     └──┬───┘ └──┬───┘ └───┬───┘
+ │  sched  mem  fs     │ kernel      │  messages│         │
+ │  drivers  network   │        ┌────┴─────────┴─────────┴──┐
+ │  (all in one space) │        │  ▓ tiny microkernel ▓     │ kernel
+ └─────────────────────┘        │  IPC · sched · basic mem  │
+                                └───────────────────────────┘
+  fast, big, fragile             robust, modular, more overhead</div>
+<figcaption>Monolithic puts everything in kernel space; microkernel pushes services out to user space.</figcaption>
+</figure>
+
+<h3>Hybrid Kernel</h3>
+<p>A pragmatic middle ground: a mostly-monolithic kernel for speed, but structured with some
+microkernel ideas and message passing. <b>Examples:</b> Windows NT, macOS (XNU = Mach + BSD).</p>
+
+<h3>Modular Kernel</h3>
+<p>A monolithic core that can <b>load and unload components at runtime</b> as <b>modules</b> — you get
+monolithic speed with some of the flexibility of a microkernel. <b>Example:</b> Linux, via
+<b>loadable kernel modules</b> (a driver you <code>insmod</code>/<code>modprobe</code> without
+recompiling the kernel; see Part XV). Modern Linux is best described as a <em>modular monolithic</em>
+kernel.</p>
+
+<table class="avoid">
+<thead><tr><th>Property</th><th>Monolithic</th><th>Microkernel</th><th>Hybrid</th><th>Modular</th></tr></thead>
+<tbody>
+<tr><td>Where services run</td><td>Kernel space</td><td>User space</td><td>Mostly kernel</td><td>Kernel (loadable)</td></tr>
+<tr><td>Speed</td><td class="c">Highest</td><td class="c">Lower</td><td class="c">High</td><td class="c">High</td></tr>
+<tr><td>Fault isolation</td><td class="c">Poor</td><td class="c">Excellent</td><td class="c">Medium</td><td class="c">Poor–Medium</td></tr>
+<tr><td>Extensibility</td><td class="c">Hard</td><td class="c">Easy</td><td class="c">Medium</td><td class="c">Easy (modules)</td></tr>
+<tr><td>Example</td><td>Classic UNIX</td><td>QNX, seL4</td><td>Windows, macOS</td><td>Linux</td></tr>
+</tbody>
+</table>
+
+<div class="box mistake"><div class="box-title"><span class="ic">&#9888;</span>Common Mistake</div>
+Saying "Linux is a pure monolithic kernel." It is monolithic in that services run in kernel space,
+but it is <em>modular</em> — drivers and features load and unload at runtime as kernel modules. The
+precise answer is "modular monolithic," and saying so signals real understanding.</div>
+
+<!-- ======================================================= -->
+<div class="checkpoint">
+  <div class="cp-head">&#10003;&nbsp; Check Your Understanding — Part I</div>
+  <div class="cp-body">
+    <h4>Conceptual (explain in your own words)</h4>
+    <ol class="tight">
+      <li>State the two fundamental jobs of an operating system and give an example of each.</li>
+      <li>What is the difference between user space/kernel space and user mode/kernel mode?</li>
+      <li>Why can't a user program simply switch itself into kernel mode?</li>
+      <li>Distinguish an interrupt, an exception, and a trap by <em>source</em> and <em>timing</em>.</li>
+      <li>Explain the difference between an API and a system call.</li>
+    </ol>
+    <h4>Application</h4>
+    <ol class="tight" start="6">
+      <li>You call <code>printf("hi")</code> a thousand times in a loop. Explain why this may result
+      in far fewer than a thousand <code>write</code> system calls.</li>
+      <li>A driver has a bug that dereferences a bad pointer. Predict the outcome on a monolithic
+      kernel vs. a microkernel, and why.</li>
+      <li>Order these boot stages: init/systemd, bootloader, firmware (UEFI), kernel.</li>
+    </ol>
+    <h4>Interview-level</h4>
+    <ol class="tight" start="9">
+      <li>"Why are system calls expensive, and how do real systems reduce that cost?"</li>
+      <li>"Is Linux monolithic or a microkernel? Defend your answer."</li>
+    </ol>
+
+    <div class="cp-mastered"><div class="box-title">Can You Explain This? (no notes)</div>
+    The user/kernel boundary and the three ways to cross it &middot; API vs system call &middot;
+    resource manager vs extended machine &middot; monolithic vs microkernel trade-offs.</div>
+
+    <div class="box real" style="margin-top:8pt;"><div class="box-title"><span class="ic">&#9873;</span>Practical Task</div>
+    On any Linux machine (or WSL), run <code>strace -c ls</code>. Read the summary: which system calls
+    did <code>ls</code> make, and how many times? Identify one call that reads directory data and one
+    that writes your terminal. You have just watched the abstraction stack work.</div>
+
+    <p style="margin-top:8pt;"><b>Mastered when&hellip;</b> you can draw the Application &rarr; Library
+    &rarr; System Call &rarr; Kernel &rarr; Hardware stack from memory, explain what enforces each
+    boundary, and describe exactly what happens (in hardware and software) during a single
+    <code>write()</code> call.</p>
+  </div>
+</div>

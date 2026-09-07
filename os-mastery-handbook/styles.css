@@ -1,0 +1,341 @@
+/* ==========================================================================
+   OPERATING SYSTEMS MASTERY — Stylesheet
+   Textbook typography + component system for WeasyPrint (A4)
+   ========================================================================== */
+
+/* ---------- Design tokens ---------- */
+:root {
+  --ink:        #1b1b1f;
+  --ink-soft:   #3a3f47;
+  --muted:      #5b6270;
+  --primary:    #123a63;   /* deep navy-blue  */
+  --primary-2:  #1f5fa8;   /* brighter blue   */
+  --accent:     #2563a8;
+  --rule:       #d6dce4;
+
+  --concept-bg: #eef4fb;  --concept-br: #2f6bb0;  --concept-hd: #1a4d86;
+  --tip-bg:     #ecf6ef;  --tip-br:     #2e8b57;  --tip-hd:     #206a41;
+  --mistake-bg: #fdeeeb;  --mistake-br: #c0392b;  --mistake-hd: #97281c;
+  --rev-bg:     #f2eefb;  --rev-br:     #6b4ea8;  --rev-hd:     #4e3583;
+  --real-bg:    #fbf5e7;  --real-br:    #b8860b;  --real-hd:    #8a6608;
+  --note-bg:    #eef1f5;  --note-br:    #6b7280;  --note-hd:    #3f4652;
+
+  --code-bg:    #f6f8fa;  --code-br:    #dde3ea;  --code-ink:   #1f2937;
+  --code-kw:    #b1003e;  --code-cm:    #6a737d;  --code-str:   #0a6e3f;
+
+  --tbl-head:   #123a63;  --tbl-stripe: #f2f6fb;  --tbl-br: #c4ccd6;
+}
+
+/* ---------- Page geometry ---------- */
+@page {
+  size: A4;
+  margin: 22mm 20mm 20mm 20mm;
+  @top-center {
+    content: string(runhead);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 8pt; color: #7a828e; letter-spacing: .3px;
+    padding-bottom: 3pt;
+  }
+  @bottom-center {
+    content: counter(page);
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 9pt; color: #6b7280;
+  }
+  @bottom-right {
+    content: "Operating Systems Mastery";
+    font-family: "DejaVu Sans", sans-serif;
+    font-size: 7.5pt; color: #aab2bd;
+  }
+}
+
+/* Cover + part dividers: no running head/foot */
+@page cover      { margin: 0; @top-center{content:none} @bottom-center{content:none} @bottom-right{content:none} }
+@page divider    { @top-center{content:none} @bottom-right{content:none} }
+@page plain      { @top-center{content:none} }
+
+/* ---------- Section counters ---------- */
+body { counter-reset: chapnum; }
+h1.chapter { counter-increment: chapnum; counter-reset: secnum;
+  string-set: runhead attr(data-run); }  /* clean running head, ignores the eyebrow span */
+h2.s { counter-increment: secnum; }
+h2.s::before {
+  content: counter(chapnum) "." counter(secnum) "\2003";
+  color: var(--primary-2); font-weight: 700;
+}
+
+/* ---------- Base ---------- */
+html { font-size: 10.6pt; }
+body {
+  font-family: "DejaVu Serif", "Liberation Serif", serif;
+  color: var(--ink);
+  line-height: 1.55;
+  text-align: justify;
+  hyphens: auto;
+  -weasy-hyphens: auto;
+}
+p { margin: 0 0 .62em 0; orphans: 2; widows: 2; }
+strong { color: var(--ink); }
+em { color: var(--ink-soft); }
+a { color: var(--accent); text-decoration: none; }
+
+/* ---------- Headings ---------- */
+h1, h2, h3, h4 { font-family: "DejaVu Sans", "Liberation Sans", sans-serif; color: var(--primary); line-height: 1.22; text-align: left; hyphens: none; }
+
+h1 {  /* Chapter / Part-content opener */
+  font-size: 21pt; font-weight: 700; margin: 0 0 .1em 0;
+  break-before: page; padding-bottom: .18em;
+  string-set: runhead content(text);
+}
+h1 .chnum { display:block; font-size: 10.5pt; font-weight:700; letter-spacing:2.5px;
+  text-transform: uppercase; color: var(--primary-2); margin-bottom: 6pt; }
+h1::after { content:""; display:block; height:3px; width:100%;
+  background: linear-gradient(90deg,var(--primary) 0%, var(--primary-2) 55%, #cfe0f2 100%); margin-top:8pt; }
+
+h2 { font-size: 15pt; font-weight: 700; margin: 1.5em 0 .5em; padding-left: 9pt;
+  border-left: 4px solid var(--primary-2); }
+h3 { font-size: 12.2pt; font-weight: 700; margin: 1.25em 0 .4em; color: var(--primary-2); }
+h4 { font-size: 10.8pt; font-weight: 700; margin: 1em 0 .3em; color: var(--ink-soft);
+  text-transform: uppercase; letter-spacing: .6px; }
+
+h2, h3, h4 { break-after: avoid; }
+h1 + p, h2 + p, h3 + p { orphans: 3; }
+
+/* PDF outline / bookmarks */
+h1.chapter { bookmark-level: 1; }
+h2.s       { bookmark-level: 2; }
+.part h1   { bookmark-level: 1; }
+.toc h1, .fm h1 { bookmark-level: 1; }
+h3, h4 { bookmark-level: none; }
+
+/* ---------- Lists ---------- */
+ul, ol { margin: .2em 0 .7em 0; padding-left: 1.5em; }
+li { margin: .18em 0; }
+li::marker { color: var(--primary-2); }
+ul.tight li, ol.tight li { margin: .04em 0; }
+dl { margin: .3em 0; }
+dt { font-weight: 700; color: var(--primary); font-family:"DejaVu Sans",sans-serif; font-size:9.8pt; }
+dd { margin: 0 0 .5em 1.1em; }
+
+/* ---------- Inline code & keys ---------- */
+code, kbd, samp {
+  font-family: "DejaVu Sans Mono", "Liberation Mono", monospace;
+  font-size: 0.86em;
+}
+:not(pre) > code {
+  background: #eef1f5; color: #a02040;
+  padding: 0.08em 0.35em; border-radius: 3px; border: 1px solid #e0e5eb;
+  white-space: nowrap;
+}
+kbd {
+  background: #2b2f36; color: #f4f6f8; padding: .06em .45em; border-radius: 3px;
+  border: 1px solid #11141a; font-size: .8em;
+}
+
+/* ---------- Code blocks ---------- */
+pre {
+  font-family: "DejaVu Sans Mono", monospace;
+  background: var(--code-bg); color: var(--code-ink);
+  border: 1px solid var(--code-br); border-left: 3px solid var(--primary-2);
+  border-radius: 5px; padding: 9pt 11pt; margin: .55em 0 .9em;
+  font-size: 8.5pt; line-height: 1.45;
+  white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere;
+  text-align: left; hyphens: none;
+  break-inside: avoid;
+}
+pre.long { break-inside: auto; }
+pre code { background: none; border: none; color: inherit; padding: 0; font-size: 1em; white-space: inherit; }
+pre .cm { color: var(--code-cm); font-style: italic; }
+pre .kw { color: var(--code-kw); font-weight: 700; }
+pre .st { color: var(--code-str); }
+pre .fn { color: #7a4bd0; }
+pre .ttl { display:block; font-family:"DejaVu Sans",sans-serif; font-size:8pt; font-weight:700;
+  color:#8a93a0; text-transform:uppercase; letter-spacing:.5px; margin:-2pt 0 5pt; }
+
+/* ---------- Callout boxes ---------- */
+.box {
+  break-inside: avoid; margin: .8em 0 1em; padding: 8pt 12pt 9pt;
+  border-radius: 6px; border: 1px solid; border-left-width: 4px;
+  font-size: 9.9pt; line-height: 1.5; text-align: left;
+}
+.box p:last-child { margin-bottom: 0; }
+.box .box-title {
+  font-family: "DejaVu Sans", sans-serif; font-weight: 700; font-size: 9.3pt;
+  letter-spacing: .4px; text-transform: uppercase; margin-bottom: 5pt;
+  display: flex; align-items: baseline;
+}
+.box .box-title .ic { font-size: 11pt; margin-right: 7pt; }
+
+.concept { background: var(--concept-bg); border-color: var(--concept-br); }
+.concept .box-title { color: var(--concept-hd); }
+.tip     { background: var(--tip-bg);     border-color: var(--tip-br); }
+.tip .box-title { color: var(--tip-hd); }
+.mistake { background: var(--mistake-bg); border-color: var(--mistake-br); }
+.mistake .box-title { color: var(--mistake-hd); }
+.revision{ background: var(--rev-bg);     border-color: var(--rev-br); }
+.revision .box-title { color: var(--rev-hd); }
+.real    { background: var(--real-bg);    border-color: var(--real-br); }
+.real .box-title { color: var(--real-hd); }
+.note    { background: var(--note-bg);    border-color: var(--note-br); }
+.note .box-title { color: var(--note-hd); }
+
+/* Definition inline chip */
+.term { font-weight: 700; color: var(--primary); font-family:"DejaVu Sans",sans-serif; }
+
+/* ---------- Tables ---------- */
+table { border-collapse: collapse; width: 100%; margin: .6em 0 1em;
+  font-size: 9.1pt; break-inside: auto; text-align: left; hyphens: none; }
+table.avoid { break-inside: avoid; }
+caption { caption-side: top; font-family:"DejaVu Sans",sans-serif; font-size: 8.6pt;
+  font-weight:700; color: var(--muted); text-align:left; margin-bottom:4pt;
+  text-transform: uppercase; letter-spacing:.5px; }
+thead { display: table-header-group; }
+th {
+  background: var(--tbl-head); color: #fff; font-family:"DejaVu Sans",sans-serif;
+  font-weight: 700; font-size: 8.7pt; text-align: left;
+  padding: 5pt 7pt; border: 1px solid #0d2c4c; vertical-align: top;
+}
+td { padding: 4.5pt 7pt; border: 1px solid var(--tbl-br); vertical-align: top; line-height: 1.4; }
+tbody tr:nth-child(even) { background: var(--tbl-stripe); }
+td code, th code { white-space: normal; }
+td.c, th.c { text-align: center; }
+td.mono { font-family:"DejaVu Sans Mono",monospace; font-size: 8.3pt; white-space: nowrap; }
+
+/* ---------- Diagrams ---------- */
+figure { margin: .8em 0 1em; break-inside: avoid; text-align: center; }
+figure svg { max-width: 100%; height: auto; }
+figcaption { font-family:"DejaVu Sans",sans-serif; font-size: 8.4pt; color: var(--muted);
+  margin-top: 5pt; text-align: center; font-style: italic; }
+.diagram {
+  break-inside: avoid; margin: .7em 0 1em; padding: 12pt; text-align: center;
+  background: #fbfcfe; border: 1px solid var(--rule); border-radius: 6px;
+}
+.asciiart {
+  font-family: "DejaVu Sans Mono", monospace; font-size: 8pt; line-height: 1.35;
+  white-space: pre; text-align: left; display: inline-block; margin: 0 auto;
+  color: var(--ink-soft);
+}
+
+/* Flow diagram (boxed steps with arrows) */
+.flow { display: flex; flex-wrap: wrap; align-items: stretch; justify-content: center;
+  gap: 0; margin: .7em 0 1em; break-inside: avoid; }
+.flow.vert { flex-direction: column; align-items: center; }
+.flow .node {
+  font-family:"DejaVu Sans",sans-serif; font-size: 8.8pt; font-weight:600;
+  background: #eef4fb; border: 1.4px solid var(--primary-2); color: var(--primary);
+  border-radius: 5px; padding: 6pt 11pt; text-align: center; line-height:1.25;
+}
+.flow .node.hw  { background:#f0efe8; border-color:#9a8f6a; color:#6a5f38; }
+.flow .node.k   { background:#fdeeeb; border-color:#c0392b; color:#8a251a; }
+.flow .node.u   { background:#ecf6ef; border-color:#2e8b57; color:#206a41; }
+.flow .arr { font-family:"DejaVu Sans",sans-serif; color: var(--primary-2); font-weight:700;
+  align-self: center; padding: 0 8pt; font-size: 12pt; }
+.flow.vert .arr { padding: 3pt 0; }
+.flow .sub { display:block; font-weight:400; font-size:7.6pt; color: var(--muted); }
+
+/* ---------- Gantt chart ---------- */
+.gantt { display: flex; margin: .5em 0 .2em; break-inside: avoid; font-family:"DejaVu Sans",sans-serif; }
+.gantt .seg { border: 1px solid var(--primary); border-right: none; padding: 5pt 2pt;
+  text-align: center; font-size: 8.6pt; font-weight:700; color: var(--primary);
+  background: #eaf1fa; position: relative; }
+.gantt .seg:last-child { border-right: 1px solid var(--primary); }
+.gantt .seg.idle { background: #efe1e1; color:#8a4b4b; border-color:#b98a8a; }
+.gantt-ticks { display:flex; font-family:"DejaVu Sans Mono",monospace; font-size: 7.8pt; color: var(--muted); margin-bottom:.6em; }
+.gantt-ticks span { text-align: left; margin-left:-3pt; }
+
+/* ---------- Checkpoint block ---------- */
+.checkpoint {
+  break-inside: avoid-page; margin: 1.4em 0 1em; padding: 0; border-radius: 7px;
+  border: 1.5px solid var(--primary); overflow: hidden;
+}
+.checkpoint > .cp-head {
+  background: var(--primary); color:#fff; font-family:"DejaVu Sans",sans-serif;
+  font-weight:700; font-size: 11pt; padding: 6pt 12pt; letter-spacing:.5px;
+}
+.checkpoint > .cp-body { padding: 9pt 13pt; background:#fbfcfe; }
+.checkpoint h4 { margin: .5em 0 .3em; color: var(--primary); border:none; }
+.checkpoint h4:first-child { margin-top: 0; }
+.cp-mastered { background: var(--tip-bg); border:1px solid var(--tip-br); border-radius:5px;
+  padding:6pt 10pt; margin-top:8pt; font-size:9.6pt; }
+.cp-mastered .box-title { color: var(--tip-hd); font-family:"DejaVu Sans",sans-serif;
+  font-weight:700; font-size:9pt; text-transform:uppercase; letter-spacing:.4px; margin-bottom:3pt; }
+
+/* ---------- Interview Q&A ---------- */
+.qa { margin: .5em 0; break-inside: avoid; }
+.qa .q { font-family:"DejaVu Sans",sans-serif; font-weight:700; color: var(--primary);
+  font-size: 10pt; margin-bottom: 2pt; }
+.qa .q::before { content:"Q  "; color: var(--primary-2); }
+.qa .a { margin-left: 0; }
+.qa .a::before { content:"A  "; font-family:"DejaVu Sans",sans-serif; font-weight:700; color: var(--tip-hd); }
+.qbank { counter-reset: qn; }
+.qbank .qi { break-inside: avoid; margin:.45em 0; padding-left: 1.9em; text-indent: -1.9em; }
+.qbank .qi::before { counter-increment: qn; content: "Q" counter(qn) ". ";
+  font-family:"DejaVu Sans",sans-serif; font-weight:700; color: var(--primary-2); }
+
+/* ---------- Title page ---------- */
+.cover { page: cover; height: 100vh; display: flex; flex-direction: column;
+  color: #fff; background: var(--primary);
+  background-image: linear-gradient(150deg,#0d2c4c 0%, #123a63 45%, #1f5fa8 100%);
+  text-align: center; break-after: page; }
+.cover .cover-top { flex: 0 0 auto; padding: 34mm 18mm 0; }
+.cover .cover-mid { flex: 1 1 auto; padding: 0 16mm; display:flex; flex-direction:column; justify-content:center; }
+.cover .cover-bot { flex: 0 0 auto; padding: 0 18mm 26mm; }
+.cover .eyebrow { font-family:"DejaVu Sans",sans-serif; letter-spacing: 6px; font-size: 11pt;
+  text-transform: uppercase; color:#a9c8ec; margin-bottom: 4mm; }
+.cover h1.title { font-family:"DejaVu Sans",sans-serif; font-weight: 700; font-size: 43pt;
+  line-height: 1.05; color:#fff; border:none; margin: 0; break-before: avoid; }
+.cover h1.title::after { content:none; }
+.cover .subtitle { font-family:"DejaVu Serif",serif; font-style: italic; font-size: 15pt;
+  color:#dbe7f5; margin-top: 7mm; line-height:1.4; }
+.cover .rule { width: 64mm; height: 3px; background:#7fb0e6; margin: 9mm auto; }
+.cover .tagline { font-family:"DejaVu Sans",sans-serif; font-size: 10.5pt; color:#bcd3ee; line-height:1.7; }
+.cover .badges { font-family:"DejaVu Sans",sans-serif; font-size: 9pt; color:#cfe0f2;
+  margin-top: 6mm; line-height: 2; }
+.cover .badges span { border:1px solid #4b79ad; border-radius: 20px; padding: 3pt 10pt; margin: 0 3pt; white-space:nowrap; }
+.cover .foot { font-family:"DejaVu Sans",sans-serif; font-size: 9pt; color:#9fbfe2; letter-spacing:1px; }
+
+/* ---------- Part divider ---------- */
+.part { page: divider; break-before: page; height: 100vh;
+  display:flex; flex-direction: column; justify-content: center;
+  background: #f4f7fb; padding: 0 26mm; text-align: left; }
+.part .pnum { font-family:"DejaVu Sans",sans-serif; font-weight:700; font-size: 13pt;
+  letter-spacing: 5px; text-transform: uppercase; color: var(--primary-2); }
+.part .pbar { width: 42mm; height: 4px; background: var(--primary-2); margin: 6mm 0; }
+.part h1 { break-before: avoid; font-size: 32pt; color: var(--primary); margin:0; border:none; string-set: runhead content(text); }
+.part h1::after { content: none; }
+.part .pdesc { font-family:"DejaVu Serif",serif; font-style: italic; font-size: 13pt;
+  color: var(--ink-soft); margin-top: 7mm; max-width: 120mm; line-height:1.5; text-align:left; }
+.part .ptoc { font-family:"DejaVu Sans",sans-serif; font-size: 9.4pt; color: var(--muted);
+  margin-top: 12mm; line-height: 1.9; }
+.part .ptoc b { color: var(--primary); }
+
+/* ---------- Table of contents ---------- */
+.toc { page: plain; }
+.toc h1 { break-before: page; }
+.toc ul { list-style: none; padding: 0; margin: 0; }
+.toc .toc-part { font-family:"DejaVu Sans",sans-serif; font-weight:700; font-size: 10.6pt;
+  color: var(--primary); margin: 11pt 0 3pt; text-transform: uppercase; letter-spacing:.5px;
+  border-bottom: 1.5px solid var(--rule); padding-bottom:2pt; }
+.toc .toc-ch { font-size: 9.9pt; margin: 2.5pt 0; padding-left: 4mm; display:flex; }
+.toc .toc-ch a { color: var(--ink-soft); text-decoration: none; flex: 1; }
+.toc .toc-ch a::after {
+  content: " " leader('. ') " " target-counter(attr(href), page);
+  color: var(--muted); font-family:"DejaVu Sans",sans-serif; font-size: 9pt;
+}
+.toc .toc-front a::after { content: " " leader('. ') " " target-counter(attr(href), page); }
+
+/* ---------- Misc ---------- */
+hr.soft { border:none; border-top:1px solid var(--rule); margin: 1.1em 0; }
+.lead { font-size: 11.4pt; color: var(--ink-soft); line-height: 1.6; margin-bottom: 1em; }
+.small { font-size: 8.8pt; color: var(--muted); }
+.center { text-align: center; }
+.nobreak { break-inside: avoid; }
+.spacer { height: 4mm; }
+.two-col { column-count: 2; column-gap: 9mm; }
+.two-col .box, .two-col pre, .two-col table, .two-col figure { break-inside: avoid; }
+.badge { font-family:"DejaVu Sans",sans-serif; font-size:7.6pt; font-weight:700; color:#fff;
+  background: var(--primary-2); border-radius:3px; padding:1pt 5pt; vertical-align: middle; letter-spacing:.3px; }
+.badge.beg { background:#2e8b57; } .badge.int{ background:#c9820a; } .badge.adv{ background:#b0392b; } .badge.iv{ background:#6b4ea8; }
+.kv { font-family:"DejaVu Sans Mono",monospace; font-size:8.6pt; }
+.formula { font-family:"DejaVu Serif",serif; font-style: italic; background:#f7f9fc;
+  border:1px solid var(--rule); border-radius:5px; padding:6pt 10pt; margin:.5em 0; text-align:center; font-size: 10.2pt; }
+.formula b { font-style: normal; color: var(--primary); }
