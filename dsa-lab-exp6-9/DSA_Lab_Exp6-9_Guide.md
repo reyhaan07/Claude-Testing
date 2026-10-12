@@ -18,6 +18,7 @@ C:\DSA>notepad exp6a.c
 ```
 
 **Shared inputs (learn these once, reuse them):**
+
 - **Graph G4** (Exp 6a, 6b): `0 4 1 999 / 4 0 2 5 / 1 2 0 8 / 999 5 8 0`
 - **Graph M4** (Exp 7a, 7b): `0 2 3 0 / 2 0 1 4 / 3 1 0 5 / 0 4 5 0`
 - **Graph U5** (Exp 8a, 8b): `01100 / 10010 / 10001 / 01000 / 00100`, start at 0
@@ -33,6 +34,7 @@ C:\DSA>notepad exp6a.c
 **Aim:** To find the shortest distance from a source vertex to all other vertices using Dijkstra's algorithm.
 
 **Algorithm**
+
 1. Read the number of vertices `n` and the cost matrix (999 = no edge).
 2. Read the source vertex `src`.
 3. Set `dist[i] = cost[src][i]`, `dist[src] = 0`, and mark `src` visited.
@@ -107,6 +109,7 @@ C:\DSA>
 **Memory shortcut:** **"PICK – MARK – RELAX"** (pick the minimum, mark it visited, relax its neighbours). Formula: `dist[u] + cost[u][v] < dist[v]`.
 
 **Viva**
+
 1. *Q: What is the time complexity?* **A:** O(V²) with an adjacency matrix. With a min-heap and adjacency list it is O((V+E) log V).
 2. *Q: Does Dijkstra work with negative edge weights?* **A:** No. Once a vertex is finalised its distance is never changed, so a later negative edge could make the result wrong. Use Bellman-Ford for negative weights.
 3. *Q: Is Dijkstra greedy or dynamic programming?* **A:** Greedy. It always picks the nearest unvisited vertex.
@@ -118,6 +121,7 @@ C:\DSA>
 **Aim:** To find the shortest distances between every pair of vertices using the Floyd–Warshall algorithm.
 
 **Algorithm**
+
 1. Read `n` and the cost matrix `d` (999 = no edge, 0 on the diagonal).
 2. For each intermediate vertex `k = 0 … n-1`:
 3. For each source `i`:
@@ -188,6 +192,7 @@ Row 0 is exactly Dijkstra's answer (`0 3 1 8`), which is a good self-check. The 
 **Memory shortcut:** **"K-I-J, go via K"**. Formula: `d[i][j] = min(d[i][j], d[i][k] + d[k][j])`.
 
 **Viva**
+
 1. *Q: What is the time and space complexity?* **A:** O(V³) time and O(V²) space.
 2. *Q: Why must `k` be the outermost loop?* **A:** Paths through vertex `k` must be built only after all paths using vertices `0…k-1` are complete. That ordering is the DP property.
 3. *Q: How do you detect a negative cycle?* **A:** After the algorithm finishes, if any diagonal entry `d[i][i]` is less than 0, a negative cycle exists.
@@ -201,6 +206,7 @@ Row 0 is exactly Dijkstra's answer (`0 3 1 8`), which is a good self-check. The 
 **Aim:** To find the minimum cost spanning tree of a graph using Kruskal's algorithm.
 
 **Algorithm**
+
 1. Read `n` and the cost matrix. Replace 0 (no edge) with 999.
 2. Set `parent[i] = i` for every vertex (each vertex is its own set).
 3. While fewer than `n-1` edges are selected:
@@ -281,6 +287,7 @@ C:\DSA>
 **Memory shortcut:** **"SMALLEST EDGE, NO CYCLE"**. Kruskal = **E**dge-based (K for Kruskal, think "edges").
 
 **Viva**
+
 1. *Q: What is the time complexity?* **A:** O(E log E), dominated by sorting the edges. This matrix version is O(V³).
 2. *Q: How does Kruskal detect a cycle?* **A:** With union-find (disjoint sets). If `find(a) == find(b)`, the two vertices are already connected, so adding the edge would make a cycle.
 3. *Q: How many edges does an MST have?* **A:** Exactly V − 1 edges.
@@ -292,6 +299,7 @@ C:\DSA>
 **Aim:** To find the minimum cost spanning tree of a graph using Prim's algorithm.
 
 **Algorithm**
+
 1. Read `n` and the cost matrix. Replace 0 (no edge) with 999.
 2. Mark vertex 0 as visited (it is the start of the tree).
 3. Repeat `n-1` times:
@@ -360,6 +368,7 @@ C:\DSA>
 **Memory shortcut:** **"GROW THE TREE FROM 0"**. Prim = **P**oint/vertex-based.
 
 **Viva**
+
 1. *Q: What is the difference between Prim and Kruskal?* **A:** Prim grows a single tree vertex by vertex and is better for dense graphs. Kruskal picks edges globally and may form a forest first, which suits sparse graphs.
 2. *Q: What is the time complexity?* **A:** O(V²) with an adjacency matrix, or O(E log V) with a heap.
 3. *Q: Is the MST unique?* **A:** It is unique if all edge weights are distinct. Otherwise the edges may differ, but the total cost is always the same.
@@ -373,6 +382,7 @@ C:\DSA>
 **Aim:** To traverse a graph using Depth First Search.
 
 **Algorithm**
+
 1. Read `n` and the adjacency matrix.
 2. Read the starting vertex `s`.
 3. Call `dfs(s)`.
@@ -438,6 +448,7 @@ Graph edges: 0-1, 0-2, 1-3, 2-4.
 **Memory shortcut:** **"DFS = Dive deep, uses Stack (recursion)"**.
 
 **Viva**
+
 1. *Q: Which data structure does DFS use?* **A:** A stack. Here it is the recursion call stack.
 2. *Q: What is the time complexity?* **A:** O(V²) with an adjacency matrix, or O(V+E) with an adjacency list.
 3. *Q: What are the applications of DFS?* **A:** Cycle detection, topological sort, connected components, path finding, and maze solving.
@@ -449,6 +460,7 @@ Graph edges: 0-1, 0-2, 1-3, 2-4.
 **Aim:** To traverse a graph using Breadth First Search.
 
 **Algorithm**
+
 1. Read `n`, the adjacency matrix, and the starting vertex `s`.
 2. Enqueue `s` and mark it visited.
 3. While the queue is not empty:
@@ -511,6 +523,7 @@ C:\DSA>
 **Memory shortcut:** **"BFS = Broad, level by level, uses Queue"**. Same graph: DFS **0 1 3 2 4**, BFS **0 1 2 3 4**.
 
 **Viva**
+
 1. *Q: Which data structure does BFS use?* **A:** A queue (FIFO).
 2. *Q: Why use BFS for shortest paths?* **A:** In an unweighted graph, BFS reaches each vertex using the fewest possible edges.
 3. *Q: What is the time complexity?* **A:** O(V²) with an adjacency matrix, or O(V+E) with an adjacency list.
@@ -522,6 +535,7 @@ C:\DSA>
 **Aim:** To find a topological ordering of the vertices of a Directed Acyclic Graph (DAG).
 
 **Algorithm**
+
 1. Read `n` and the directed adjacency matrix.
 2. Compute the indegree of each vertex (the sum of its column).
 3. Repeat `n` times:
@@ -585,6 +599,7 @@ Graph edges: 1→0, 1→2, 0→3, 2→3. The starting indegrees are 0:1, 1:0, 2:
 **Memory shortcut:** **"ZERO-IN goes OUT"**: the vertex with zero indegree is output first.
 
 **Viva**
+
 1. *Q: For which graphs is topological sort possible?* **A:** Only for Directed Acyclic Graphs (DAGs).
 2. *Q: Is the topological order unique?* **A:** Not always. Any order where every edge u→v has u before v is valid.
 3. *Q: What are the applications?* **A:** Course prerequisite ordering, task scheduling, build systems (makefiles), and compiler dependency resolution.
@@ -600,6 +615,7 @@ Graph edges: 1→0, 1→2, 0→3, 2→3. The starting indegrees are 0:1, 1:0, 2:
 **Aim:** To sort a list of elements using insertion sort.
 
 **Algorithm**
+
 1. Read `n` and the array `a[]`.
 2. For `i = 1` to `n-1`:
 3. Set `key = a[i]` and `j = i-1`.
@@ -652,6 +668,7 @@ C:\DSA>
 **Memory shortcut:** **"KEY – SHIFT – DROP"**.
 
 **Viva**
+
 1. *Q: What are the best and worst cases?* **A:** Best case O(n), when the array is already sorted. Worst case O(n²), when it is reverse sorted.
 2. *Q: Is insertion sort stable and in-place?* **A:** Yes, it is both stable and in-place.
 3. *Q: When is insertion sort preferred?* **A:** For small arrays or arrays that are nearly sorted. It is also adaptive.
@@ -663,6 +680,7 @@ C:\DSA>
 **Aim:** To sort a list of elements using selection sort.
 
 **Algorithm**
+
 1. Read `n` and the array `a[]`.
 2. For `i = 0` to `n-2`:
 3. Set `min = i`.
@@ -715,6 +733,7 @@ C:\DSA>
 **Memory shortcut:** **"FIND MIN – SWAP TO FRONT"**.
 
 **Viva**
+
 1. *Q: What is the time complexity?* **A:** O(n²) in every case, including best, average and worst.
 2. *Q: How many swaps does it do?* **A:** At most n − 1 swaps. This is useful when writing to memory is expensive.
 3. *Q: Is selection sort stable?* **A:** No, the standard version is not stable. A long-distance swap can reorder equal elements.
@@ -726,6 +745,7 @@ C:\DSA>
 **Aim:** To sort a list of elements using quick sort (divide and conquer).
 
 **Algorithm**
+
 1. Read `n` and the array `a[]`, then call `quick(a, 0, n-1)`.
 2. In `quick(lo, hi)`: if `lo < hi`, partition the array and get pivot index `p`.
 3. Partition: set `pivot = a[hi]` and `i = lo-1`.
@@ -789,6 +809,7 @@ C:\DSA>
 **Memory shortcut:** **"PIVOT LAST, SMALL GOES LEFT, RECURSE BOTH"**.
 
 **Viva**
+
 1. *Q: What is the time complexity?* **A:** Best and average case O(n log n). Worst case O(n²), which happens when the array is already sorted and the last element is the pivot.
 2. *Q: How can the worst case be avoided?* **A:** Use a random pivot or the median-of-three pivot.
 3. *Q: Is quick sort stable?* **A:** No. It is in-place, using only O(log n) recursion stack.
@@ -800,6 +821,7 @@ C:\DSA>
 **Aim:** To sort a list of elements using merge sort (divide and conquer).
 
 **Algorithm**
+
 1. Read `n` and the array `a[]`, then call `msort(a, 0, n-1)`.
 2. In `msort(lo, hi)`: if `lo < hi`, set `mid = (lo+hi)/2`.
 3. Recursively sort the left half `msort(lo, mid)` and the right half `msort(mid+1, hi)`.
@@ -864,6 +886,7 @@ C:\DSA>
 **Memory shortcut:** **"SPLIT – SORT – MERGE"** (divide, conquer, combine).
 
 **Viva**
+
 1. *Q: What is the time complexity?* **A:** O(n log n) in all cases, using the recurrence T(n) = 2T(n/2) + n.
 2. *Q: What is the space complexity?* **A:** O(n) extra space for the temporary array, so it is not in-place.
 3. *Q: Is merge sort stable?* **A:** Yes, because it uses `<=` when merging. It is preferred for linked lists and external sorting.
@@ -875,6 +898,7 @@ C:\DSA>
 **Aim:** To implement a hash table using open addressing with linear probing.
 
 **Algorithm**
+
 1. Create a table of size 10 and set every slot to −1 (empty).
 2. Read `n` keys. For each key, try `i = 0, 1, 2, …`.
 3. Compute `idx = (key % 10 + i) % 10`.
@@ -951,6 +975,7 @@ C:\DSA>
 **Memory shortcut:** **"COLLIDE → STEP +1"**. Formula: `(h + i) % 10`.
 
 **Viva**
+
 1. *Q: What is a collision?* **A:** A collision happens when two keys hash to the same index (for example, 23 and 43 both give 3).
 2. *Q: What is the drawback of linear probing?* **A:** Primary clustering. Occupied slots form long runs, which makes later insertions and searches slower.
 3. *Q: What is the load factor?* **A:** α = n / table size. Here it is 5/10 = 0.5. Performance drops as α approaches 1.
@@ -962,6 +987,7 @@ C:\DSA>
 **Aim:** To implement a hash table using open addressing with quadratic probing.
 
 **Algorithm**
+
 1. Create a table of size 10 and set every slot to −1 (empty).
 2. Read `n` keys. For each key, try `i = 0, 1, 2, …`.
 3. Compute `idx = (key % 10 + i*i) % 10`.
@@ -1038,6 +1064,7 @@ C:\DSA>
 **Memory shortcut:** **"COLLIDE → JUMP i²"**. Formula: `(h + i*i) % 10`. Same keys: Linear puts 37 at **8**, Quadratic puts 37 at **1**.
 
 **Viva**
+
 1. *Q: What advantage does quadratic probing have over linear probing?* **A:** It reduces primary clustering because the probe positions spread out.
 2. *Q: What is secondary clustering?* **A:** Keys with the same home index still follow the same probe sequence. Double hashing removes this.
 3. *Q: Can quadratic probing fail even when the table has free slots?* **A:** Yes. It may not visit every slot. If the table size is prime and the load factor α ≤ 0.5, a free slot is guaranteed to be found.
@@ -1078,6 +1105,7 @@ G4 (6a,6b)      M4 (7a,7b)    U5 (8a,8b)    DAG (8c)
 ```
 
 **One-line memory hooks**
+
 | Prog | Hook | Key line |
 |---|---|---|
 | Dijkstra | PICK–MARK–RELAX | `dist[u]+cost[u][v] < dist[v]` |
@@ -1095,6 +1123,7 @@ G4 (6a,6b)      M4 (7a,7b)    U5 (8a,8b)    DAG (8c)
 | Quadratic | Collide → +i² | `(key%SIZE + i*i)%SIZE` |
 
 **Complexity table (quick viva revision)**
+
 | Algorithm | Time | Space |
 |---|---|---|
 | Dijkstra (matrix) | O(V²) | O(V) |
@@ -1110,6 +1139,7 @@ G4 (6a,6b)      M4 (7a,7b)    U5 (8a,8b)    DAG (8c)
 | Hashing (open addressing) | O(1) avg, O(n) worst | O(table size) |
 
 **Exam-hall tips**
+
 - If `gcc` is "not recognized", GCC is not on PATH. Check with `gcc --version`.
 - You can type a matrix row by row, or all numbers on one line separated by spaces. `scanf` accepts both.
 - Windows also accepts `exp6a` without `.exe` when you run a program.
