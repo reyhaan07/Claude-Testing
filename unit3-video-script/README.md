@@ -14,6 +14,11 @@ College of Engineering Unit 3 notes (CS8491, 23 pages).
 | 4 | [part4-ideas-units-operation-performance.md](part4-ideas-units-operation-performance.md) | Topics 4–7: Eight Great Ideas, Functional Units, Basic Operational Concepts, CPU Performance |
 | 5 | [part5-instructions-formats-datapath-revision.md](part5-instructions-formats-datapath-revision.md) | Topics 8–10: Operations & Operands, Instruction Representation, Building a Datapath + **Final Revision** |
 
+**Studying for the exam?** Start with
+[exam-revision-sheet.md](exam-revision-sheet.md): short answers, long-answer plans,
+a formula sheet, 15 practice problems with answers, diagrams to memorise and common
+mistakes.
+
 ## Scene format
 
 Every scene has: **Scene title**, **Visual directions**, **Diagram
