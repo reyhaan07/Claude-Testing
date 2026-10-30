@@ -517,6 +517,17 @@ CPU time = Instruction count × CPI × Clock cycle time
 CPU time = User CPU time + System CPU time
 ```
 
+**Narration:**
+> Performance is one over execution time. To say X is n times as fast as Y, divide
+> the slower time by the faster time.
+> CPU time is clock cycles times clock cycle time, or clock cycles divided by clock
+> rate.
+> Clock cycles are instruction count times CPI.
+> So the master equation is: CPU time equals instruction count, times CPI, times clock
+> cycle time.
+> And CPU time is user CPU time plus system CPU time. Always convert units first, and
+> show every step.
+
 ---
 
 ## Scene R.5 — Revision: Instruction Formats
@@ -528,6 +539,15 @@ I: op6 | rs5 | rt5 | constant/address16     = 32
 J: op6 | target26                           = 32
 Opcodes: R-type 0 (add funct 32, sub funct 34), addi 8, lw 35, sw 43
 ```
+
+**Narration:**
+> Three formats, all exactly 32 bits.
+> R-format: op 6, rs 5, rt 5, rd 5, shamt 5, funct 6. Used by add, sub, and, or and slt.
+> I-format: op 6, rs 5, rt 5, and a 16-bit constant or address. Used by addi, lw, sw and
+> beq.
+> J-format: op 6 and a 26-bit target. Used by j and jal.
+> Remember the opcodes: R-type 0, with funct 32 for add and 34 for subtract; addi 8;
+> lw 35; sw 43.
 
 ---
 
@@ -542,6 +562,17 @@ Opcodes: R-type 0 (add funct 32, sub funct 34), addi 8, lw 35, sw 43
 5 Pseudodirect  target = PC[31:28] ‖ address26 ‖ 00                j, jal
 ```
 
+**Narration:**
+> The five addressing modes.
+> Immediate: the operand is a 16-bit constant inside the instruction, as in addi.
+> Register: the operand is a register, as in add.
+> Base or displacement: the effective address is the base register plus the
+> sign-extended offset, as in lw and sw.
+> PC-relative: the branch target is PC plus 4, plus the offset shifted left by 2, as in
+> beq and bne.
+> Pseudodirect: the jump address is the upper 4 bits of the PC, joined to the 26-bit
+> address, joined to two zeros, as in j and jal.
+
 ---
 
 ## Scene R.7 — Revision: Instruction Execution Sequence
@@ -554,6 +585,16 @@ PC → MAR → Read → MDR → IR → decode → operands (MAR/MDR) → ALU →
 MIPS datapath:
 Fetch (PC → instruction memory; PC + 4) → Read registers → ALU → Memory (lw/sw) → Write-back (R, lw) → PC update
 ```
+
+**Narration:**
+> Two views of the same idea.
+> In the basic operational concepts, the PC goes to the MAR, memory is read, the word
+> arrives in the MDR, and moves to the IR. The instruction is decoded, operands are
+> fetched through the MAR and MDR, the ALU operates, the result is stored, and the PC
+> moves to the next instruction.
+> In the MIPS datapath: fetch the instruction and compute PC plus 4, read the registers,
+> use the ALU, access memory for loads and stores, write back for R-type and loads, and
+> update the PC.
 
 ---
 
